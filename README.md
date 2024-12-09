@@ -1,2 +1,2 @@
-# MIDS-203
-Statistics for Data Science
+# MIDS
+203: Statistics for Data Science
