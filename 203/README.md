@@ -1,0 +1,5 @@
+# MIDS 203 Final Project
+Stats final project for DATASCI 203
+
+## Project Overview
+This study investigates the relationship between Spotify’s “danceability” metric and track popularity using a dataset of over 30,000 songs. Leveraging proprietary Spotify audio features such as energy and instrumentalness, the analysis employs a baseline regression model to evaluate how danceability associates with popularity, complemented by multivariate models for additional insights. Initial findings suggest a statistically significant, though modest, relationship, with danceability explaining only a small fraction of the variance in track popularity. Challenges include data preparation, such as handling duplicates and addressing songs with zero popularity, as well as ensuring robust model assumptions. Despite limitations, the results highlight the complexity of musical popularity and the value of focusing on specific features like danceability for understanding listener engagement. This research offers implications for artists, record labels, and marketers seeking to optimize music for broader appeal.
