@@ -1,0 +1,177 @@
+library(readr)
+library(data.table)
+library(stargazer)
+library(sandwich)
+library(lmtest)
+library(knitr)
+library(here)
+
+
+# =========================
+# LOAD DATA
+# =========================
+file <-'SocialMediaViews_March30_46.csv'
+d_raw <- fread(here("data", "raw","pilot", file ), na.strings = c("", "NA"))
+# =========================
+# INITIAL CLEANING
+# =========================
+
+# Drop Qualtrics metadata rows (first 3 rows after header)
+d <- d_raw[-(1:2)]
+
+# Convert -99 to NA
+d[d == -99] <- NA
+
+#Fix erroneous column name
+setnames(d, "oil__infl_accurate", "oil_infl_accurate")
+
+#Change complete to be 0 instead of NA
+d[, complete := ifelse(is.na(complete), 0, complete)]
+
+# =========================
+# KEEP RELEVANT COLUMNS
+# =========================
+keep <- c(
+  # ID
+  "ResponseId","Finished","Duration (in seconds)","Status", "SC0",
+  
+  # Demographics
+  "gender","age","race","hispanic_origin","education",
+  "country_origin","region","politics",
+  
+  # Trust
+  grep("expert_trust", names(d), value = TRUE),
+  
+  # Health
+  grep("health_engagement", names(d), value = TRUE),
+  
+  # Info
+  "info_source",
+  
+  # Attention
+  grep("^attention", names(d), value = TRUE),
+  "Q_RecaptchaScore",
+  "Q_DuplicateRespondent",
+  "complete",
+  
+  # Outcomes
+  grep("accurate|authentic|believable", names(d), value = TRUE),
+  
+  # Treatment
+  "condition_sequence","order_pattern",
+  "post_meat_source","post_oil_source"
+)
+
+d <- d[, ..keep]
+
+#Convert columns
+char_cols <- c(
+  "ResponseId",
+  "info_source",
+  "condition_sequence",
+  "order_pattern",
+  "post_meat_source",
+  "post_oil_source"
+)
+
+num_cols <- setdiff(names(d), char_cols)
+
+d[, (num_cols) := lapply(.SD, function(x) suppressWarnings(as.numeric(x))),
+  .SDcols = num_cols]
+
+#Filter to those who passed captcha, passed attention test
+unique(d$Q_RecaptchaScore)
+unique(d$attention1)
+unique(d$attention2)
+unique(d$attention_meat_exp)
+unique(d$complete)
+d[ , keep_flag := 
+  (Q_RecaptchaScore >= 0.5) &
+   ( attention1 == 4) &
+    (attention2 == 3) &
+    (
+      is.na(attention_meat_exp) | attention_meat_exp == 1
+    ) &
+    (
+      is.na(attention_oil_inf) | attention_oil_inf == 1
+    )&
+    (complete == 1)&
+    ((SC0 != 3 )| is.na(SC0))]
+d[, keep_flag := ifelse(keep_flag == TRUE, 1, 0)]
+
+
+
+
+
+# -----------------------------
+# 3. Credibility Indices
+# -----------------------------
+
+# -----------------------------
+# 1. Expert Trust Index
+# -----------------------------
+d[, expert_trust_index := rowMeans(.SD, na.rm = TRUE),
+  .SDcols = c("1_expert_trust","2_expert_trust","3_expert_trust",
+              "4_expert_trust","5_expert_trust","6_expert_trust")]
+
+# -----------------------------
+# 2. Health Engagement Index
+# -----------------------------
+d[, health_engagement_index := rowMeans(.SD, na.rm = TRUE),
+  .SDcols = c("1_health_engagement","2_health_engagement","3_health_engagement",
+              "4_health_engagement","5_health_engagement")]
+
+# General attitude toward experts 
+d[, expert_trust_index := rowMeans(.SD, na.rm=TRUE),
+  .SDcols = c("1_expert_trust","2_expert_trust","3_expert_trust",
+             "4_expert_trust","5_expert_trust")]
+
+# Meat expert credibility
+d[, meat_exp_cred := rowMeans(.SD, na.rm = TRUE),
+  .SDcols = c("meat_exp_accurate","meat_exp_authentic","meat_exp_believable")]
+
+# Meat influencer credibility
+d[, meat_infl_cred := rowMeans(.SD, na.rm = TRUE),
+  .SDcols = c("meat_infl_accurate","meat_infl_authentic","meat_infl_believable")]
+
+#Meat credibility
+d[, meat_cred := fifelse(
+  post_meat_source == "expert", meat_exp_cred,
+  meat_infl_cred
+)]
+
+# Oil expert credibility
+d[, oil_exp_cred := rowMeans(.SD, na.rm = TRUE),
+  .SDcols = c("oil_exp_accurate","oil_exp_authentic","oil_exp_believable")]
+
+# Oil influencer credibility
+d[, oil_infl_cred := rowMeans(.SD, na.rm = TRUE),
+  .SDcols = c("oil_infl_accurate","oil_infl_authentic","oil_infl_believable")]
+
+#Oil Credibility
+d[, oil_cred := fifelse(
+  post_oil_source == "expert", oil_exp_cred,
+  oil_infl_cred
+)]
+
+
+
+# =========================
+# RECODE AGE
+# =========================
+d[, age := factor(age,
+                  levels = 1:7,
+                  labels = c("Under18","18-24","25-34","35-44","45-54","55-64","65+"))]
+
+d[, age_group := ifelse(age %in% c("18-24","25-34"), "18-34",
+                        fifelse(age %in% c("35-44","45-54"), "35-54",
+                                "55+"))]
+
+d[, age_group := factor(age_group)]
+
+# =========================
+# SAVE CLEAN DATA
+# =========================
+saveRDS(d, "clean_pilot_data_zr.rds")
+fwrite(d, "clean_pilot_data_zr.csv")
+

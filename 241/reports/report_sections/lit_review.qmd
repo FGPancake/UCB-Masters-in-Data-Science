@@ -1,0 +1,14 @@
+<!-- Start here (No title needed) -->
+<!-- References are saved in the /references.bib file use the same format. -->
+<!-- Examples: -->
+<!--  - at the end of a sentence [@zhang2023] -->
+<!--  - @zhang2023 is part of the sentence  -->
+<!--  - [@zhang2023] = (Author, Year) -->
+<!--  - @zhang2023 = Author (Year) -->
+<!-- No need to import references here just use the format as in the examples above -->
+
+Source credibility theory provides a useful framework for understanding why different messages could change people’s evaluation of information on social media, particularly health or nutrition recommendations. This theory suggests that individuals evaluate information based on three key factors: expertise, trustworthiness, and likeability. @pornpitakpan2004 found that source credibility is crucial to how participants evaluate information, and expert sources are found to be more credible than non-expert sources, though these effects vary by context. A recent study upholds these findings. In an experiment using Instagram posts focused on e-cigarette education, @lee2024 found that posts attributed to health experts produced higher perceived credibility and greater trust than identical posts attributed to a friend or social media influencer.
+
+However, current research also points to additional meaningful credibility cues not captured by source credibility theory, including both authenticity and distrust of expertise. @zhang2023 argue that online audiences also respond to authenticity displays and parasocial interaction. In their study of scientists and influencers communicating on social media, they find that source cues affected perceptions of both authenticity and expertise, the former defined by whether a source appears genuine, self-revealing, and socially relatable. With respect to trust in expertise, @merkley2020 found a link between anti-intellectualism and distrust of expert sources. Similarly, @case2022 found that political beliefs can shape how one evaluates expertise and trustworthiness. They tested the effect of source cues and message frames on COVID recommendations and found no effect as political ideologies explained nearly all variation in responses. These studies suggest that source credibility may derive from personal experience/authenticity or political in-group status, in addition to expertise and factual evidence. 
+
+Taken together, the literature suggests competing possibilities for how people might evaluate information on social media, such as nutritional recommendations. Expert sources may enhance perceived accuracy and believability because they signal knowledge and trustworthiness [@pornpitakpan2004], while influencer sources may project authenticity because they fit the relational norms of social media [@zhang2023]. This study tests these competing credibility signals using nutritional recommendations recently in the news.

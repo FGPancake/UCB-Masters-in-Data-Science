@@ -1,0 +1,666 @@
+---
+title: "Analysis"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(readr)
+library(data.table)
+library(stargazer)
+library(sandwich)
+library(dplyr)
+library(lmtest)
+library(knitr)
+library(here)
+library(broom)
+library(fixest)
+library(tidyr)
+library(modelsummary)
+```
+
+# Introduction
+Social Media has become a primary avenue for many consumers to consume various information such as news, health advice, entertainment, and many others. With many AI capabilities, Social Media has become more influential in targeting individuals with the information of their interest. To the most extent, information related to entertainment, advertisements might be okay. However, when individuals are exposed with health related information, not only experts in this field are sharing their perspective, we are also seeing many influencers sharing their perspective based on their experience, their observations, etc.
+
+While often influencers generate higher volume of engagement and visibility, experts are mostly considered as credible due to their knowledge, education, and expertise. This raises an important question, does the source of information itself shape how the information is perceived by users and how do they act on these advices?
+
+In real-world contexts, it's challenging to determine the effect of the source because posts from experts and influencers vary across multiple dimensions, including varying audiences, and presentation styles. Consequently, observational comparisons cannot accurately assess whether differences in engagement or credibility are genuinely influenced by the source or if they are due to these confounding factors.
+
+To address this challenge, this experiment utilizes a randomized controlled experiment that keeps the content of a nutrition message consistent while varying only the source label (either expert or influencer). By randomly assigning participants to different conditions, the design isolates the causal impact of source cues on key outcomes, such as perceived credibility, trust, and intention to follow the advice. This method allows for a clear examination of whether labeling information as originating from an expert rather than an influencer significantly changes how individuals evaluate and respond to nutritional content.
+
+## Research Question
+Are expert recommendations perceived as more credible than non-expert recommendations in the context of social media nutritional posts or recommendations?
+
+## Hypotheses
+
+### Null Hypothesis (H0):
+There is no difference in credibility, trust, or behavioral intention between participants exposed to expert and influencer source cues.
+$H_0 : E[Y|Expert] = E[Y|Influencer]$
+
+## Alternative Hypothesis (H1):
+Participants exposed to the expert source cue will report higher credibility, trust, and behavioral intention than those exposed to the influencer source cue.
+$H_a : E[Y|Expert] > E[Y|Influencer]$
+
+where Y represents outcome such as perceived credibility, trust, or behavioral intention
+
+# =========================
+# PROCESS DATA
+# =========================
+
+```{r process_data}
+file <- 'SocialMediaViews_April 8, 2026_21.02.csv'
+d_raw <- fread(file = here("final_project", "analysis", file), na.strings = c("", "NA"))
+
+d <- d_raw[-(1:2)]
+d[d == -99] <- NA
+d[, complete := ifelse(is.na(complete), 0, complete)]
+
+keep <- c(
+  "ResponseId", "Finished", "Duration (in seconds)", "Status", "SC0",
+  "gender", "age", "race", "hispanic_origin", "education",
+  "country_origin", "region", "politics",
+  grep("expert_trust",      names(d), value = TRUE),
+  grep("health_engagement", names(d), value = TRUE),
+  "info_source",
+  grep("^attention", names(d), value = TRUE),
+  "Q_RecaptchaScore", "Q_DuplicateRespondent", "complete",
+  grep("accurate|authentic|believable", names(d), value = TRUE),
+  "condition_sequence", "order_pattern",
+  "post_meat_source", "post_oil_source",
+  "IPAddress"
+)
+
+d <- d[, ..keep]
+
+char_cols <- c("ResponseId", "info_source", "condition_sequence", "order_pattern",
+               "post_meat_source", "post_oil_source", "IPAddress")
+num_cols  <- setdiff(names(d), char_cols)
+d[, (num_cols) := lapply(.SD, function(x) suppressWarnings(as.numeric(x))), .SDcols = num_cols]
+
+d$Q_DuplicateRespondent[is.na(d$Q_DuplicateRespondent)] <- 0
+hist(d$`Duration (in seconds)`[d$`Duration (in seconds)` < 500], breaks = 50)
+
+d[, keep_flag := as.integer(
+  (!is.na(Q_RecaptchaScore) & Q_RecaptchaScore >= 0.5) &
+  (!is.na(complete) & complete == 1) &
+  (!is.na(SC0) & SC0 <= 1) &
+  (is.na(Q_DuplicateRespondent) | Q_DuplicateRespondent != TRUE) &
+  (!is.na(`Duration (in seconds)`) & `Duration (in seconds)` >= 120)
+)]
+sum(d$keep_flag)
+
+d[, expert_trust_index := rowMeans(.SD, na.rm = TRUE),
+  .SDcols = c("1_expert_trust","2_expert_trust","3_expert_trust","4_expert_trust","5_expert_trust")]
+
+d[, health_engagement_index := rowMeans(.SD, na.rm = TRUE),
+  .SDcols = c("1_health_engagement","2_health_engagement","3_health_engagement",
+              "4_health_engagement","5_health_engagement")]
+
+d[, meat_exp_cred  := rowMeans(.SD, na.rm = TRUE),
+  .SDcols = c("meat_exp_accurate","meat_exp_authentic","meat_exp_believable")]
+d[, meat_infl_cred := rowMeans(.SD, na.rm = TRUE),
+  .SDcols = c("meat_infl_accurate","meat_infl_authentic","meat_infl_believable")]
+d[, meat_cred := fifelse(post_meat_source == "expert", meat_exp_cred, meat_infl_cred)]
+
+d[, oil_exp_cred  := rowMeans(.SD, na.rm = TRUE),
+  .SDcols = c("oil_exp_accurate","oil_exp_authentic","oil_exp_believable")]
+d[, oil_infl_cred := rowMeans(.SD, na.rm = TRUE),
+  .SDcols = c("oil_infl_accurate","post_oil_authentic","post_oil_believable")]
+d[, oil_cred := fifelse(post_oil_source == "expert", oil_exp_cred, oil_infl_cred)]
+
+d[, age := factor(age, levels = 1:7,
+  labels = c("Under18","18-24","25-34","35-44","45-54","55-64","65+"))]
+d[, age_group := ifelse(age %in% c("18-24","25-34"), "18-34",
+    fifelse(age %in% c("35-44","45-54"), "35-54", "55+"))]
+d[, age_group := factor(age_group)]
+
+saveRDS(d, here("clean_data_zr.rds"))
+fwrite(d, here("clean_data_zr.csv"))
+```
+
+# =========================
+# LOAD DATA
+# =========================
+
+```{r load_data}
+d_rds <- readRDS(file = here("clean_data_zr.rds"))
+d     <- d_rds[keep_flag == 1]
+d     <- d[SC0 == 0]
+```
+
+# =========================
+# DESCRIPTIVE STATISTICS
+# =========================
+
+```{r descriptive_stats, results='asis'}
+vars <- c("expert_trust_index", "health_engagement_index",
+          "meat_exp_cred", "meat_infl_cred", "oil_exp_cred", "oil_infl_cred",
+          "oil_cred", "meat_cred")
+
+stargazer(as.data.frame(d[, ..vars]), type = "latex", header = FALSE,
+          title = "Descriptive Statistics for Pilot Variables",
+          summary.stat = c("mean","sd","min","max"))
+
+lapply(d[, ..vars], function(x) sum(is.na(x)))
+```
+
+# =========================
+# HISTOGRAMS
+# =========================
+
+```{r histograms}
+hist(d$expert_trust_index, main = "Trust in Experts",            xlab = "Index")
+hist(d$meat_exp_cred,      main = "Meat Expert Credibility",     xlab = "Credibility")
+hist(d$meat_infl_cred,     main = "Meat Influencer Credibility", xlab = "Credibility")
+hist(d$oil_exp_cred,       main = "Oil Expert Credibility",      xlab = "Credibility")
+hist(d$oil_infl_cred,      main = "Oil Influencer Credibility",  xlab = "Credibility")
+```
+
+# =========================
+# PAIRED T-TESTS
+# =========================
+
+```{r ttests}
+t_meat <- t.test(d$meat_exp_cred, d$meat_infl_cred, paired = FALSE)
+print(t_meat)
+
+t_oil <- t.test(d$oil_exp_cred, d$oil_infl_cred, paired = FALSE)
+print(t_oil)
+```
+
+# =========================
+# REGRESSION ANALYSIS
+# =========================
+
+```{r regression_models}
+model_oil_1 <- lm(oil_cred ~ post_oil_source, data = d)
+coeftest(model_oil_1, vcov = vcovHC(model_oil_1, type = "HC1"))
+
+model_oil_2 <- lm(oil_cred ~ post_oil_source + expert_trust_index + health_engagement_index, data = d)
+coeftest(model_oil_2, vcov = vcovHC(model_oil_2, type = "HC1"))
+
+model_oil_3 <- lm(oil_cred ~ post_oil_source + expert_trust_index + health_engagement_index + age + gender + education, data = d)
+coeftest(model_oil_3, vcov = vcovHC(model_oil_3, type = "HC1"))
+
+model_oil_4 <- lm(oil_cred ~ post_oil_source + health_engagement_index + post_oil_source * health_engagement_index, data = d)
+coeftest(model_oil_4, vcov = vcovHC(model_oil_4, type = "HC1"))
+
+model_meat_1 <- lm(meat_cred ~ post_meat_source, data = d)
+coeftest(model_meat_1, vcov = vcovHC(model_meat_1, type = "HC1"))
+
+model_meat_2 <- lm(meat_cred ~ post_meat_source + expert_trust_index + health_engagement_index, data = d)
+coeftest(model_meat_2, vcov = vcovHC(model_meat_2, type = "HC1"))
+
+model_meat_3 <- lm(meat_cred ~ post_meat_source + expert_trust_index + health_engagement_index + age + gender + education, data = d)
+coeftest(model_meat_3, vcov = vcovHC(model_meat_3, type = "HC1"))
+
+model_meat_4 <- lm(meat_cred ~ post_meat_source + health_engagement_index + post_meat_source * health_engagement_index, data = d)
+coeftest(model_meat_4, vcov = vcovHC(model_meat_4, type = "HC1"))
+```
+
+```{r codechunk1, results='asis'}
+stargazer(model_meat_1, model_meat_2, model_meat_3, model_meat_4,
+  dep.var.labels   = "Meat Credibility",
+  title            = "Meat Regressions",
+  type             = "latex",
+  covariate.labels = c("Influencer", "Expert Trust Index", "Health Engagement Index",
+                       "Age 18-24", "Age 25-34", "Age 35-44", "Age 45-54", "Age 55-64",
+                       "Gender", "Education", "Influencer*Health Engagement"),
+  column.sep.width = "2pt",
+  omit.stat        = "F",
+  header           = FALSE)
+```
+
+\newpage
+
+```{r codechunk2, results='asis'}
+stargazer(model_oil_1, model_oil_2, model_oil_3, model_oil_4,
+  title            = "Oil Regressions",
+  type             = "latex",
+  dep.var.labels   = "Oil Credibility",
+  covariate.labels = c("Influencer", "Expert Trust Index", "Health Engagement Index",
+                       "Age 18-24", "Age 25-34", "Age 35-44", "Age 45-54", "Age 55-64",
+                       "Gender", "Education", "Influencer*Health Engagement"),
+  column.sep.width = "2pt",
+  omit.stat        = "F",
+  header           = FALSE)
+```
+
+# =========================
+# WITHIN-SUBJECT MODELS
+# =========================
+
+```{r create_long_data}
+d_long <- d %>%
+  rename(
+    oil_infl_authentic  = post_oil_authentic,
+    oil_infl_believable = post_oil_believable,
+    dmy1_slp_attention  = attention1,
+    dmy2_wt_attention   = attention2,
+    oil_infl_attention  = attention_oil_inf,
+    oil_exp_attention   = attention_oil_exp,
+    meat_infl_attention = attention_meat_infl,
+    meat_exp_attention  = attention_meat_exp
+  ) %>%
+  pivot_longer(
+    cols = c(
+      meat_exp_accurate, meat_exp_authentic, meat_exp_believable, meat_infl_accurate,
+      meat_exp_attention, meat_infl_authentic, meat_infl_believable, meat_exp_cred,
+      meat_infl_cred, meat_infl_attention,
+      oil_exp_accurate, oil_exp_authentic, oil_exp_believable, oil_exp_cred,
+      oil_exp_attention, oil_infl_accurate, oil_infl_cred, oil_infl_authentic,
+      oil_infl_believable, oil_infl_attention,
+      dmy1_slp_accurate, dmy1_slp_authentic, dmy1_slp_believable, dmy1_slp_attention,
+      dmy2_wt_accurate, dmy2_wt_authentic, dmy2_wt_believable, dmy2_wt_attention
+    ),
+    names_to  = "variable",
+    values_to = "value"
+  ) %>%
+  mutate(
+    question = case_when(
+      grepl("^meat", variable) ~ "meat",
+      grepl("^oil",  variable) ~ "oil",
+      grepl("^dmy1", variable) ~ "dmy1",
+      grepl("^dmy2", variable) ~ "dmy2"
+    ),
+    inf_expert = case_when(
+      grepl("exp",  variable) ~ "expert",
+      grepl("infl", variable) ~ "influencer"
+    ),
+    metric = case_when(
+      grepl("accurate",  variable) ~ "accurate",
+      grepl("authentic", variable) ~ "authentic",
+      grepl("believable",variable) ~ "believable",
+      grepl("cred",      variable) ~ "cred",
+      grepl("attention", variable) ~ "attention"
+    )
+  ) %>%
+  group_by(across(-c(variable, value))) %>%
+  summarise(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = metric, values_from = value) %>%
+  mutate(
+    inf_expert          = ifelse(is.na(inf_expert), "", inf_expert),
+    question_inf_expert = trimws(paste0(question, inf_expert))
+  ) %>%
+  mutate(
+    position = case_when(
+      order_pattern == "tfft" & question == "meat" ~ 1,
+      order_pattern == "tfft" & question == "dmy1" ~ 2,
+      order_pattern == "tfft" & question == "dmy2" ~ 3,
+      order_pattern == "tfft" & question == "oil"  ~ 4,
+      order_pattern == "ftft" & question == "dmy1" ~ 1,
+      order_pattern == "ftft" & question == "meat" ~ 2,
+      order_pattern == "ftft" & question == "dmy2" ~ 3,
+      order_pattern == "ftft" & question == "oil"  ~ 4
+    )
+  ) %>%
+  select(ResponseId, condition_sequence, order_pattern, question, inf_expert,
+         question_inf_expert, position, accurate, authentic, believable, cred,
+         attention, everything()) %>%
+  filter(!(condition_sequence == "influencer_meat_expert_oil" &
+             question_inf_expert %in% c("meatexpert", "oilinfluencer"))) %>%
+  filter(!(condition_sequence == "expert_meat_influencer_oil" &
+             question_inf_expert %in% c("meatinfluencer", "oilexpert")))
+
+d_long_within <- filter(d_long, inf_expert %in% c("expert", "influencer"))
+stopifnot(nrow(d_long_within) == 2 * nrow(d))
+```
+
+```{r within_models, results='asis'}
+model_within_1 <- lm(cred ~ inf_expert + factor(ResponseId), data = d_long_within)
+
+res_1 <- tidy(coeftest(model_within_1, vcov = vcovCL(model_within_1, cluster = ~ResponseId)))
+res_1[grepl("inf_expert", res_1$term), ]
+
+se_within_1 <- sqrt(diag(vcovCL(model_within_1, cluster = ~ResponseId)))
+
+stargazer(model_within_1,
+  se               = list(se_within_1),
+  title            = "Within-Subjects Regression (Respondent Fixed Effects)",
+  dep.var.labels   = "Perceived Credibility",
+  covariate.labels = c("Influencer (vs Expert)"),
+  omit             = "ResponseId",
+  omit.labels      = "Respondent FE",
+  add.lines        = list(c("Respondent FE", "Yes")),
+  type             = "latex",
+  header           = FALSE,
+  omit.stat        = "f",
+  column.sep.width = "2pt")
+```
+
+\newpage
+
+# =========================
+# POOLED WITHIN-SUBJECT MODELS
+# =========================
+
+```{r pooled_models_old, results='asis'}
+d_pooled <- d %>%
+  pivot_longer(
+    cols      = c(meat_cred, oil_cred),
+    names_to  = "claim",
+    values_to = "cred"
+  ) %>%
+  mutate(
+    claim       = gsub("_cred", "", claim),
+    post_source = ifelse(claim == "meat", post_meat_source, post_oil_source),
+    is_expert   = as.integer(post_source == "expert")
+  ) %>%
+  as.data.frame()
+
+model_pool_1 <- lm(cred ~ is_expert + factor(ResponseId), data = d_pooled)
+model_pool_2 <- lm(cred ~ is_expert + expert_trust_index + health_engagement_index +
+                     factor(ResponseId), data = d_pooled)
+model_pool_3 <- lm(cred ~ is_expert + expert_trust_index + health_engagement_index +
+                     age + gender + education + factor(ResponseId), data = d_pooled)
+model_pool_4 <- lm(cred ~ is_expert * health_engagement_index +
+                     factor(ResponseId), data = d_pooled)
+
+se_pool_1 <- sqrt(diag(vcovCL(model_pool_1, cluster = ~ResponseId)))
+se_pool_2 <- sqrt(diag(vcovCL(model_pool_2, cluster = ~ResponseId)))
+se_pool_3 <- sqrt(diag(vcovCL(model_pool_3, cluster = ~ResponseId)))
+se_pool_4 <- sqrt(diag(vcovCL(model_pool_4, cluster = ~ResponseId)))
+
+stargazer(
+  model_pool_1, model_pool_2, model_pool_3, model_pool_4,
+  se               = list(se_pool_1, se_pool_2, se_pool_3, se_pool_4),
+  title            = "Pooled Within-Subject Regressions (Meat \\& Oil)",
+  dep.var.labels   = "Perceived Credibility",
+  covariate.labels = c(
+    "Expert (vs Influencer)",
+    "Expert Trust Index",
+    "Health Engagement Index",
+    "Age 18-24", "Age 25-34", "Age 35-44", "Age 45-54", "Age 55-64",
+    "Gender", "Education",
+    "Expert $\\times$ Health Engagement"
+  ),
+  omit             = "ResponseId",
+  omit.labels      = "Respondent FE",
+  add.lines        = list(c("Respondent FE", "Yes", "Yes", "Yes", "Yes")),
+  type             = "latex",
+  column.sep.width = "2pt",
+  omit.stat        = "f",
+  header           = FALSE)
+```
+
+```{r pooled_models, results='asis'}
+d_pooled <- d %>%
+  pivot_longer(
+    cols      = c(meat_cred, oil_cred),
+    names_to  = "claim",
+    values_to = "cred"
+  ) %>%
+  mutate(
+    claim         = gsub("_cred", "", claim),
+    post_source   = ifelse(claim == "meat", post_meat_source, post_oil_source),
+    is_influencer = as.integer(post_source == "influencer")
+  ) %>%
+  as.data.frame()
+
+p1 <- lm(cred ~ is_influencer + factor(ResponseId), data = d_pooled)
+p2 <- lm(cred ~ is_influencer + expert_trust_index + health_engagement_index +
+            factor(ResponseId), data = d_pooled)
+p3 <- lm(cred ~ is_influencer + expert_trust_index + health_engagement_index +
+            age + gender + education + factor(ResponseId), data = d_pooled)
+p4 <- lm(cred ~ is_influencer * health_engagement_index +
+            factor(ResponseId), data = d_pooled)
+
+sp1 <- sqrt(diag(vcovCL(p1, cluster = ~ResponseId)))
+sp2 <- sqrt(diag(vcovCL(p2, cluster = ~ResponseId)))
+sp3 <- sqrt(diag(vcovCL(p3, cluster = ~ResponseId)))
+sp4 <- sqrt(diag(vcovCL(p4, cluster = ~ResponseId)))
+
+stargazer(p1, p2, p3, p4,
+  se               = list(sp1, sp2, sp3, sp4),
+  title            = "Pooled Within-Subject Regressions (Meat \\& Oil)",
+  dep.var.labels   = "Perceived Credibility",
+  covariate.labels = c(
+    "Influencer",
+    "Expert Trust Index",
+    "Health Engagement Index",
+    "Age 18-24", "Age 25-34", "Age 35-44", "Age 45-54", "Age 55-64",
+    "Gender", "Education",
+    "Influencer $\\times$ Health Engagement"
+  ),
+  omit             = "ResponseId",
+  omit.labels      = "Respondent FE",
+  add.lines        = list(c("Respondent FE", "Yes", "Yes", "Yes", "Yes")),
+  type             = "latex",
+  column.sep.width = "2pt",
+  omit.stat        = "f",
+  header           = FALSE)
+```
+
+```{r, pooled_regression_no_dem}
+d_pooled <- d %>%
+  pivot_longer(
+    cols      = c(meat_cred, oil_cred),
+    names_to  = "claim",
+    values_to = "cred"
+  ) %>%
+  mutate(
+    claim         = gsub("_cred", "", claim),
+    post_source   = ifelse(claim == "meat", post_meat_source, post_oil_source),
+    is_influencer = as.integer(post_source == "influencer")
+  ) %>%
+  as.data.frame()
+
+p1 <- lm(cred ~ is_influencer + factor(ResponseId), data = d_pooled)
+p2 <- lm(cred ~ is_influencer + expert_trust_index + health_engagement_index +
+            factor(ResponseId), data = d_pooled)
+p4 <- lm(cred ~ is_influencer * health_engagement_index +
+            factor(ResponseId), data = d_pooled)
+
+sp1 <- sqrt(diag(vcovCL(p1, cluster = ~ResponseId)))
+sp2 <- sqrt(diag(vcovCL(p2, cluster = ~ResponseId)))
+#sp3 <- sqrt(diag(vcovCL(p3, cluster = ~ResponseId)))
+sp4 <- sqrt(diag(vcovCL(p4, cluster = ~ResponseId)))
+
+stargazer(p1, p2, p4,
+  se               = list(sp1, sp2, sp4),
+  title            = "Pooled Within-Subject Regressions (Meat \\& Oil)",
+  dep.var.labels   = "Perceived Credibility",
+  covariate.labels = c(
+    "Influencer",
+    "Expert Trust Index",
+    "Health Engagement Index",
+    "Influencer $\\times$ Health Engagement"
+  ),
+  omit             = "factor\\(ResponseId\\)",
+  omit.labels      = "Respondent FE",
+  add.lines        = list(c("Respondent FE", "Yes", "Yes", "Yes")),
+  type             = "html",
+  out              = "pooled_regression_nodem.html",
+  column.sep.width = "2pt",
+  omit.stat        = "f",
+  header           = FALSE)
+```
+
+
+\newpage
+
+# =========================
+# ATTRITION ANALYSIS
+# =========================
+
+```{r attrition_overview}
+# Overall completion rate
+completion_tbl <- data.frame(
+  Metric = c("Total responses", "Completed", "Completion rate"),
+  Value  = c(
+    nrow(d_rds),
+    sum(d_rds$complete == 1, na.rm = TRUE),
+    paste0(round(mean(d_rds$complete == 1, na.rm = TRUE) * 100, 1), "%")
+  )
+)
+kable(completion_tbl, caption = "Overall Completion Rate", booktabs = TRUE)
+
+# Sample retention after all filters
+retention_tbl <- data.frame(
+  Stage   = c("All responses", "Passed all filters (keep_flag)", "Also passed attention (SC0 = 0)"),
+  N       = c(nrow(d_rds), sum(d_rds$keep_flag, na.rm = TRUE), nrow(d))
+)
+kable(retention_tbl, caption = "Sample Retention by Filtering Stage", booktabs = TRUE)
+```
+
+```{r attrition_by_treatment}
+# Completion by meat source assignment
+meat_tbl <- as.data.frame(
+  prop.table(table(d_rds$post_meat_source, d_rds$complete), 1)
+) %>%
+  setNames(c("Meat Source", "Completed", "Proportion")) %>%
+  mutate(Proportion = round(Proportion, 3))
+kable(meat_tbl, caption = "Completion Rate by Meat Post Source Assignment", booktabs = TRUE)
+
+# Completion by oil source assignment
+oil_tbl <- as.data.frame(
+  prop.table(table(d_rds$post_oil_source, d_rds$complete), 1)
+) %>%
+  setNames(c("Oil Source", "Completed", "Proportion")) %>%
+  mutate(Proportion = round(Proportion, 3))
+kable(oil_tbl, caption = "Completion Rate by Oil Post Source Assignment", booktabs = TRUE)
+```
+
+```{r attrition_models_old, results='asis'}
+# Regress completion on treatment to test for differential attrition
+model_attr_meat_1 <- lm(complete ~ post_meat_source, data = d_rds)
+model_attr_meat_2 <- lm(complete ~ post_meat_source + age + gender + expert_trust_index, data = d_rds)
+
+model_attr_oil_1  <- lm(complete ~ post_oil_source,  data = d_rds)
+model_attr_oil_2  <- lm(complete ~ post_oil_source  + age + gender + expert_trust_index, data = d_rds)
+
+se_attr_meat_1 <- sqrt(diag(vcovHC(model_attr_meat_1, type = "HC1")))
+se_attr_meat_2 <- sqrt(diag(vcovHC(model_attr_meat_2, type = "HC1")))
+se_attr_oil_1  <- sqrt(diag(vcovHC(model_attr_oil_1,  type = "HC1")))
+se_attr_oil_2  <- sqrt(diag(vcovHC(model_attr_oil_2,  type = "HC1")))
+
+m1 <- model_attr_meat_1
+m2 <- model_attr_meat_2
+m3 <- model_attr_oil_1
+m4 <- model_attr_oil_2
+
+se1 <- se_attr_meat_1
+se2 <- se_attr_meat_2
+se3 <- se_attr_oil_1
+se4 <- se_attr_oil_2
+
+stargazer(m1, m2, m3, m4,
+  se = list(se1, se2, se3, se4),
+  title            = "Attrition Analysis: Treatment Predicting Survey Completion",
+  dep.var.labels   = c("Completed (Meat)", "Completed (Oil)"),
+  covariate.labels = c("Influencer (Meat)", "Influencer (Oil)",
+                       "Age 18-24", "Age 25-34", "Age 35-44", "Age 45-54", "Age 55-64",
+                       "Gender", "Expert Trust Index"),
+  add.lines        = list(c("Demographic Controls", "No", "Yes", "No", "Yes")),
+  column.labels    = c("Meat Source", "Oil Source"),
+  column.separate  = c(2, 2),
+  type             = "latex",
+  header           = FALSE,
+  omit.stat        = "f",
+  column.sep.width = "2pt",
+  notes            = "Robust (HC1) standard errors in parentheses. Dependent variable is binary (1 = completed survey).")
+```
+
+```{r attrition_models, results='asis'}
+m1 <- lm(complete ~ post_meat_source, data = d_rds)
+m2 <- lm(complete ~ post_oil_source,  data = d_rds)
+
+se1 <- sqrt(diag(vcovHC(m1, type = "HC1")))
+se2 <- sqrt(diag(vcovHC(m2, type = "HC1")))
+
+stargazer(m1, m2,
+  se               = list(se1, se2),
+  title            = "Attrition Analysis: Treatment Predicting Survey Completion",
+  dep.var.labels   = "Completed (Binary)",
+  column.labels    = c("Meat Source", "Oil Source"),
+  covariate.labels = c("Influencer"),
+  type             = "latex",
+  header           = FALSE,
+  omit.stat        = "f",
+  column.sep.width = "2pt",
+  notes            = "Robust (HC1) SEs. Dependent variable = 1 if completed survey.")
+```
+
+\newpage
+
+# =========================
+# DATA VISUALIZATIONS
+# =========================
+
+```{r basic_viz}
+boxplot(d$meat_exp_cred, d$meat_infl_cred,
+  names = c("Expert", "Influencer"),
+  main  = "Meat Credibility by Source", ylab = "Credibility")
+
+boxplot(d$oil_exp_cred, d$oil_infl_cred,
+  names = c("Expert", "Influencer"),
+  main  = "Oil Credibility by Source", ylab = "Credibility")
+
+meat_means <- d[, .(Expert     = mean(meat_exp_cred,  na.rm = TRUE),
+                    Influencer = mean(meat_infl_cred, na.rm = TRUE))]
+barplot(as.numeric(meat_means), names.arg = c("Expert", "Influencer"),
+  main = "Average Meat Credibility", ylab = "Mean Credibility", col = "red")
+
+oil_means <- d[, .(Expert     = mean(oil_exp_cred,  na.rm = TRUE),
+                   Influencer = mean(oil_infl_cred, na.rm = TRUE))]
+barplot(as.numeric(oil_means), names.arg = c("Expert", "Influencer"),
+  main = "Average Oil Credibility", ylab = "Mean Credibility", col = "yellow")
+
+hist(d$meat_cred, main = "Distribution of Meat Credibility", xlab = "Credibility", col = "red")
+hist(d$oil_cred,  main = "Distribution of Oil Credibility",  xlab = "Credibility", col = "yellow")
+
+plot(d$expert_trust_index, d$meat_cred,
+  main = "Trust in Experts vs Meat Credibility",
+  xlab = "Expert Trust Index", ylab = "Meat Credibility")
+abline(lm(meat_cred ~ expert_trust_index, data = d))
+
+plot(d$expert_trust_index, d$oil_cred,
+  main = "Trust in Experts vs Oil Credibility",
+  xlab = "Expert Trust Index", ylab = "Oil Credibility")
+abline(lm(oil_cred ~ expert_trust_index, data = d))
+```
+
+```{r labeled_barplots}
+d2 <- d[SC0 == 0, ]
+
+meat_means2 <- d2[, .(Expert     = mean(meat_exp_cred,  na.rm = TRUE),
+                      Influencer = mean(meat_infl_cred, na.rm = TRUE))]
+bp_meat <- barplot(as.numeric(meat_means2), names.arg = c("Expert", "Influencer"),
+  main = "Average Meat Credibility", ylab = "Mean Credibility", col = "red")
+text(x = bp_meat, y = as.numeric(meat_means2),
+  labels = round(as.numeric(meat_means2), 2), pos = 1)
+
+oil_means2 <- d2[, .(Expert     = mean(oil_exp_cred,  na.rm = TRUE),
+                     Influencer = mean(oil_infl_cred, na.rm = TRUE))]
+bp_oil <- barplot(as.numeric(oil_means2), names.arg = c("Expert", "Influencer"),
+  main = "Average Oil Credibility", ylab = "Mean Credibility", col = "yellow")
+text(x = bp_oil, y = as.numeric(oil_means2),
+  labels = round(as.numeric(oil_means2), 2), pos = 1)
+```
+
+```{r combined_barplot}
+vals <- matrix(c(
+  round(as.vector(meat_means2)$Expert,     2),
+  round(as.vector(meat_means2)$Influencer, 2),
+  round(as.vector(oil_means2)$Expert,      2),
+  round(as.vector(oil_means2)$Influencer,  2)
+), nrow = 2, byrow = FALSE)
+
+rownames(vals) <- c("Expert", "Influencer")
+colnames(vals) <- c("Meat", "Oil")
+
+par(mar = c(6, 4, 4, 2))
+bp <- barplot(vals, beside = TRUE,
+  main = "Credibility by Source and Condition",
+  ylab = "Mean Credibility",
+  col  = c("#4E79A7", "#F28E2B"))
+text(x = bp, y = vals, labels = vals, pos = 1)
+legend("bottom", inset = -0.25,
+  legend = rownames(vals),
+  fill   = c("#4E79A7", "#F28E2B"),
+  horiz  = TRUE, bty = "n")
+```

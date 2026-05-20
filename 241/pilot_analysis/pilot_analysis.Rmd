@@ -1,0 +1,119 @@
+---
+output: pdf_document
+title: Pilot Analysis
+---
+
+`{r setup, include=FALSE} library(readr) library(data.table) library(stargazer) library(sandwich) library(lmtest) library(knitr)`
+
+# =========================
+
+# LOAD DATA
+
+# =========================
+
+`{r} d_rds = readRDS(here("data","processed","clean_pilot_data_zr.rds")) d = d_rds[keep_flag == 1]`
+
+# =========================
+
+# DESCRIPTIVE STATISTICS
+
+# =========================
+
+\`\`\`{r} vars \<- c("expert_trust_index", "health_engagement_index",
+"meat_exp_cred", "meat_infl_cred", "oil_exp_cred", "oil_infl_cred",
+"oil_cred", "meat_cred")
+
+stargazer( as.data.frame(d\[, ..vars\]), type = "text", header = FALSE,
+title = "Descriptive Statistics for Pilot Variables", summary.stat =
+c("mean","sd","min","max") )
+
+lapply(d\[, ..vars\], function(x) sum(is.na(x)))
+
+
+    # =========================
+    # HISTOGRAMS
+    # =========================
+
+    ```{r}
+    hist(d$expert_trust_index, main = "Trust in Experts", xlab = "Index")
+    hist(d$meat_exp_cred, main = "Meat Expert Credibility", xlab = "Credibility")
+    hist(d$meat_infl_cred, main = "Meat Influencer Credibility", xlab = "Credibility")
+    hist(d$oil_exp_cred, main = "Oil Expert Credibility", xlab = "Credibility")
+    hist(d$oil_infl_cred, main = "Oil Influencer Credibility", xlab = "Credibility")
+
+# =========================
+
+# PAIRED T-TESTS
+
+# =========================
+
+\`\`\`{r} t_meat \<- t.test(d$meat_exp_cred, d$meat_infl_cred, paired =
+FALSE) print(t_meat)
+
+t_oil \<- t.test(d$oil_exp_cred, d$oil_infl_cred, paired = FALSE)
+print(t_oil)
+
+
+    # =========================
+    # REGRESSION ANALYSIS
+    # =========================
+
+    ```{r}
+    model_oil_1 <- lm(oil_cred ~ post_oil_source, data = d)
+    coeftest(model_oil_1, vcov = vcovHC(model_oil_1, type = "HC1"))
+
+    model_oil_2 <- lm(oil_cred ~ post_oil_source + expert_trust_index + health_engagement_index, data = d)
+    coeftest(model_oil_2, vcov = vcovHC(model_oil_2, type = "HC1"))
+
+    model_oil_3 <- lm(oil_cred ~ post_oil_source + expert_trust_index + health_engagement_index + age + gender + education, data = d)
+    coeftest(model_oil_3, vcov = vcovHC(model_oil_3, type = "HC1"))
+
+    model_oil_4 <- lm(oil_cred ~ post_oil_source * expert_trust_index + health_engagement_index, data = d)
+    coeftest(model_oil_4, vcov = vcovHC(model_oil_4, type = "HC1"))
+
+    model_oil_5 <- lm(oil_cred ~ post_oil_source * (expert_trust_index + health_engagement_index), data = d)
+    coeftest(model_oil_5, vcov = vcovHC(model_oil_5, type = "HC1"))
+
+    model_meat_1 <- lm(meat_cred ~ post_meat_source, data = d)
+    coeftest(model_meat_1, vcov = vcovHC(model_meat_1, type = "HC1"))
+
+    model_meat_2 <- lm(meat_cred ~ post_meat_source + expert_trust_index + health_engagement_index, data = d)
+    coeftest(model_meat_2, vcov = vcovHC(model_meat_2, type = "HC1"))
+
+    model_meat_3 <- lm(meat_cred ~ post_meat_source + expert_trust_index + health_engagement_index + age + gender + education, data = d)
+    coeftest(model_meat_3, vcov = vcovHC(model_meat_3, type = "HC1"))
+
+    model_meat_4 <- lm(meat_cred ~ post_meat_source * expert_trust_index + health_engagement_index, data = d)
+    coeftest(model_meat_4, vcov = vcovHC(model_meat_4, type = "HC1"))
+
+    model_meat_5 <- lm(meat_cred ~ post_meat_source * (expert_trust_index + health_engagement_index), data = d)
+    coeftest(model_meat_5, vcov = vcovHC(model_meat_5, type = "HC1"))
+
+# =========================
+
+# ATTRITION ANALYSIS
+
+# =========================
+
+\`\`\`{r} table(d$complete)
+mean(d$complete == 1, na.rm = TRUE)
+
+table(d$post_meat_source, d$complete)
+prop.table(table(d$post_meat_source, d$complete), 1)
+
+t.test(complete \~ post_meat_source, data = d) lm(complete \~
+post_meat_source, data = d)
+
+table(d$post_oil_source, d$complete)
+prop.table(table(d$post_oil_source, d$complete), 1)
+
+t.test(complete \~ post_oil_source, data = d) lm(complete \~
+post_oil_source, data = d)
+
+lm(complete \~ post_meat_source + age + gender + expert_trust_index,
+data = d) lm(complete \~ post_oil_source + age + gender +
+expert_trust_index, data = d)
+
+table(d$keep_flag)
+table(d$keep_flag, d$complete)
+prop.table(table(d$keep_flag, d\$complete), 1) \`\`\`

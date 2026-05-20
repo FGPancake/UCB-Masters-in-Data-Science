@@ -1,0 +1,223 @@
+---
+title: "power_1"
+output: html_document
+---
+
+# Power Analysis 1
+
+Design Scenario: Expert vs. Influencer (2 treatment + 1 control) (written stimuli)
+
+We select tau based on small standardized mean difference (d=0.2) as a detectable benchmark as used in Case et al, 2022 with a 7-point Likert outcomes.
+
+-   tau_expert = .4
+-   tau_influencer = .2
+
+```{r make-data, include=FALSE}
+set.seed(1234)
+# From previous study:
+# Estimated ATE - .3
+# Subjects - 1500
+# Treatment mean - 2
+# Control mean - 2.3
+# Standard deviation - 2
+# Rejection criteria p<.05
+
+# Create data table
+d <- data.table(id = 1:500) 
+
+d[ , ':='(
+  y0 = rnorm(.N, mean=0, sd=2),
+  # We select tau based on  small standardized mean difference (d=0.2) as a detectable benchmark as used in
+  # Case et al, 2022 with a 7-point Likert outcomes
+  # With SD = 2, tau = d * SD
+  # Expert: d = 0.2, tau = 0.2 * 2 =  .4 
+  tau_expert = .4,
+  # Influencer: Smaller effect, d=0.1. tau = .1 * 2 =  2
+  tau_influencer = .2 
+)]
+
+# run the experiment: assign
+d[ , treat_condition := sample(c("control", "expert", "influencer"),
+                               size=.N, replace = TRUE)]
+
+# run the experiment: measure
+d[treat_condition == 'control',     Y := y0]
+d[treat_condition == 'expert',       Y := y0 + tau_expert]
+d[treat_condition == 'influencer', Y := y0 + tau_influencer ]
+
+head(d, 3)
+
+
+```
+
+```{r first group-by, include=FALSE}
+d[ , .(group_mean = mean(Y)), keyby = .(treat_condition)]
+```
+
+The model takes the form:
+$$
+Y_{i} = \beta_{0} + \beta_{1} * Expert + \beta_{2} * Influencer + \epsilon_{i}
+$$
+```{r, include=FALSE}
+d[ , expert := treat_condition == 'expert']
+d[ , influencer := treat_condition == 'influencer']
+```
+
+```{r estimate d-in-d model, echo=FALSE}
+# Power analysis using robust standard errors
+mod_1 <- d[ , lm(Y ~ 1 + expert + influencer)]
+robust_se_mod_1 <- coeftest(mod_1, vcovHC)
+```
+
+```{r simulate experiment many times, include=FALSE, echo=TRUE}
+# function used to run experiment with different sample sizes, later replicated to produce results
+set.seed(1234)
+simulate_exp <- function(N=500, tau_expert=.4, tau_influencer=.2){
+  d <- data.table(id = 1:N)
+  # Generate data
+  d[ , ':='(
+  y0 = rnorm(.N, mean=0, sd=2),
+  tau_expert = tau_expert,
+  tau_influencer = tau_influencer)
+  ]
+  # run the experiment:
+  # assigning groups almost evenly until N length reached 
+  d[ , treat_condition := sample(rep(c("control", "expert", "influencer"),
+                                     length.out=.N))]
+  # create individual treatment indicators
+  d[ , expert := treat_condition == 'expert']
+  d[ , influencer := treat_condition == 'influencer']
+  # run the experiment: measure
+  d[treat_condition == 'control',     Y := y0]
+  d[treat_condition == 'expert',       Y := y0 + tau_expert]
+  d[treat_condition == 'influencer', Y := y0 + tau_influencer]
+  
+  model <- d[ , lm(Y ~ 1 + expert + influencer)]
+  robust_se <- coeftest(model, vcovHC)
+  # Extracting p value from matrix 
+  p_exp <- robust_se["expertTRUE", 4]
+  p_infl <- robust_se["influencerTRUE", 4]
+  c(expert=p_exp , influencer=p_infl)
+}
+```
+
+```{r p_value_sample_10pct, include=FALSE}
+obs <- nrow(d)
+p_value_10pct <- replicate(1000, simulate_exp(N=round(.10 * obs)))
+expert_power <- mean(p_value_10pct["expert", ] < .05) 
+influencer_power <- mean(p_value_10pct["influencer", ] < .05) 
+print(paste0("Expert power:", expert_power*100, "% Influencer Power:",
+             influencer_power*100, "%"))
+```
+
+```{r p_value_sample_50pct, include=FALSE, cache=TRUE}
+p_value_50pct <- replicate(1000, simulate_exp(N=round(.50 * obs)))
+expert_power_50pct <- mean(p_value_50pct["expert", ] < .05) 
+influencer_power_50pct <- mean(p_value_50pct["influencer", ] < .05)
+
+expert_power_50pct 
+influencer_power_50pct
+```
+
+```{r p_value_sample_100pct, include=FALSE, cache=TRUE}
+p_value_100pct <- replicate(1000, simulate_exp(N=round(1 * obs)))
+expert_power_100pct <-# 46%
+influencer_power_100pct <- mean(p_value_100pct["influencer", ] < .05)
+
+expert_power_100pct 
+influencer_power_100pct
+```
+
+```{r p_value_sample_130pct, include=FALSE, cache=TRUE}
+p_value_130pct <- replicate(1000, simulate_exp(N=round(1.30 * obs)))
+expert_power_130pct <- mean(p_value_130pct["expert", ] < .05) 
+influencer_power_130pct <- mean(p_value_130pct["influencer", ] < .05) 
+
+expert_power_130pct 
+influencer_power_130pct
+```
+
+```{r p_value_sample_200pct, include=FALSE, cache=TRUE}
+p_value_200pct <- replicate(1000, simulate_exp(N=round(2.00 * obs)))
+expert_power_200pct <- mean(p_value_200pct["expert", ] < .05) 
+influencer_power_200pct <- mean(p_value_200pct["influencer", ] < .05) 
+
+expert_power_200pct 
+influencer_power_200pct
+
+```
+
+```{r p_value_sample_300pct, include=FALSE, cache=TRUE}
+p_value_300pct <- replicate(1000, simulate_exp(N=round(3.00 * obs)))
+expert_power_300pct <- mean(p_value_300pct["expert", ] < .05) 
+influencer_power_300pct <- mean(p_value_300pct["influencer", ] < .05) 
+
+expert_power_300pct 
+influencer_power_300pct
+
+```
+
+```{r p_value_sample_500pct, echo=FALSE, include=FALSE, cache=TRUE}
+p_value_500pct <- replicate(1000, simulate_exp(N=round(5.00 * obs)))
+expert_power_500pct <- mean(p_value_500pct["expert", ] < .05) 
+influencer_power_500pct <- mean(p_value_500pct["influencer", ] < .05)
+print(paste0("Expert power:", expert_power_500pct*100, "% Influencer Power:", influencer_power_500pct*100, "%"))
+```
+```{r, include = FALSE}
+power_dt <- data.table(
+  sample_pct = c(0.10, 0.50, 1.00, 1.30, 2.00, 3.00, 5.00),
+  N = obs * c(0.10, 0.50, 1.00, 1.30, 2.00, 3.00, 5.00),
+  expert_power = c(
+    expert_power,
+    expert_power_50pct,
+    expert_power_100pct,
+    expert_power_130pct,
+    expert_power_200pct,
+    expert_power_300pct,
+    expert_power_500pct
+  ),
+  influencer_power = c(
+    influencer_power,
+    influencer_power_50pct,
+    influencer_power_100pct,
+    influencer_power_130pct,
+    influencer_power_200pct,
+    influencer_power_300pct,
+    influencer_power_500pct
+  )
+)
+
+power_long <- melt(
+  power_dt,
+  id.vars = c("sample_pct", "N"),
+  measure.vars = c("expert_power", "influencer_power"),
+  variable.name = "treatment",
+  value.name = "power"
+)
+
+power_long[ , treatment := fifelse(
+  treatment == "expert_power", "Expert", "Influencer"
+)]
+```
+```{r, include = FALSE, echo = TRUE}
+plot1 <- ggplot(power_long, aes(x = N, y = power, color = treatment)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0.80, linetype = "dashed") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     limits = c(0, 1)) +
+  labs(
+    title = "Power by Sample Size",
+    x = "Sample Size (N)",
+    y = "Statistical Power",
+    color = "Treatment"
+  ) +
+  theme_minimal()
+power_1 <- power_dt
+
+```
+```{r}
+print(power_1)
+```
+
+With 10% (`r obs * .10` obs) of recruitment size of the original data we have a power of `r expert_power * 100`%, and `r influencer_power * 100`% for expert and influencer group respectively. Given our largest simulation with (`r obs * 5` obs) we obtain a power of `r expert_power_500pct * 100`%, and `r influencer_power_500pct * 100`% for expert and influencer group respectively.

@@ -1,0 +1,137 @@
+---
+title: "Power Analysis"
+author:
+  - "Kathy Camp"
+  - "Zev Abraham Rosen"
+  - "Ryan Farhat-Sabet"
+  - "Shashi Shamarao"
+  - "Gerardo Solis"
+date: "`r Sys.Date()`"
+output: 
+  pdf_document: 
+    number_sections: true
+---
+
+```{r global options, include = FALSE}
+options(repos = c(CRAN = "https://cloud.r-project.org")) 
+knitr::opts_chunk$set(echo= TRUE, message = FALSE, warning = FALSE )
+
+knitr::knit_engines$set(problem_description = function(options) {
+  code <- paste(options$code, collapse = "\n")
+})
+```
+
+```{r package loads, include=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+if (!requireNamespace("pwr", quietly = TRUE)) {
+  install.packages("pwr")
+}
+
+if (!requireNamespace("pwrss", quietly = TRUE)) {
+  install.packages("pwrss")
+}
+
+if (!requireNamespace("lmerTest", quietly = TRUE)) {
+  install.packages("lmerTest")
+}
+library(pwr)
+library(pwrss)
+library(data.table)
+library(sandwich)
+library(lmtest)
+library(lme4)
+library(lmerTest)
+library(tidyverse)
+
+library(ggplot2)
+library(knitr)
+```
+
+\tableofcontents
+\newpage
+
+```{r, child='power_analysis/power_1.Rmd'}
+```
+
+
+```{r,child='power_analysis/power_2.Rmd'}
+```
+
+```{r,child='power_analysis/power_3.Rmd'}
+```
+
+```{r, include = FALSE, echo = TRUE}
+
+p1 <- melt(
+  as.data.table(power_1),
+  id.vars = c("sample_pct", "N"),
+  measure.vars = c("expert_power", "influencer_power"),
+  variable.name = "treatment",
+  value.name = "power"
+)
+
+p1[, treatment := fifelse(
+  treatment == "expert_power", "Expert", "Influencer"
+)]
+p1[, design := "Design 1"]
+
+p2 <- melt(
+  as.data.table(power_2),
+  id.vars = "sample_size",
+  measure.vars = c("power_expert", "power_influencer"),
+  variable.name = "treatment",
+  value.name = "power"
+)
+
+p2[, treatment := fifelse(
+  treatment == "power_expert", "Expert", "Influencer"
+)]
+p2[, `:=`(
+  N = sample_size,
+  design = "Design 2"
+)]
+
+p3 <- data.table(
+  N = power_3$n,
+  power = power_3$power,
+  treatment = "Single Treatment",
+  design = "Design 3"
+)
+
+power_all <- rbindlist(
+  list(
+    p1[, .(design, N, treatment, power)],
+    p2[, .(design, N, treatment, power)],
+    p3[, .(design, N, treatment, power)]
+  ),
+  use.names = TRUE
+)
+
+```
+```{r, include = FALSE}
+power_all[, line_id := paste(design, treatment, sep = " – ")]
+
+combined_plot=ggplot(power_all, aes(x = N, y = power, color = line_id)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0.80, linetype = "dashed") +
+  scale_y_continuous(
+    limits = c(0, 1),
+    labels = scales::percent_format(accuracy = 1)
+  ) +
+  labs(
+    title = "Power Curves Across Experimental Designs",
+    x = "Sample Size (N)",
+    y = "Statistical Power",
+    color = "Design / Treatment"
+  ) +
+  theme_minimal()
+```
+# Combined Results
+
+```{r}
+combined_plot
+```
+
+```{r,child='power_analysis/power_4.Rmd'}
+```
+

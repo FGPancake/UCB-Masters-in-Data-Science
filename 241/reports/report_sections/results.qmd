@@ -1,0 +1,88 @@
+<!-- Start here (No title needed) -->
+
+### Observational Trends
+Before we dive into the modeling results, we can look at the raw data to get a baseline approximation of our results. The eye test shows us a slight bump in credibility for expert claims compared to influencer claims for both red meat and seed oil examples. The difference does look small, and our sample size is less than 200 since we limited our population to compliers only, so let’s see what the regression results show.
+
+![Credibility by Source and Condition](report_sections/images/naive_comparison.png){#fig-naive width=80% fig-align="center" fig-pos="H"}
+
+### Models
+We ran four different models to measure our causal effects, each one increasing in complexity. They included:
+
+- A plain model with no covariates: 
+$$
+\text{Credibility}_i = \beta_0 + \beta_1 \text{Influencer}_i + \varepsilon_i
+$$ {#eq-model1}
+- A model with prior indexes: 
+$$
+\begin{aligned}
+\text{Credibility}_i
+  &= \beta_0 + \beta_1 \text{Influencer}_i \\
+  &\quad + \beta_2 \text{ExpertTrustIndex}_i \\
+  &\quad + \beta_3 \text{HealthEngagementIndex}_i + \varepsilon_i
+\end{aligned}
+$$ {#eq-model2}
+- A model with prior indexes and demographic covariates: 
+$$
+\begin{aligned}
+\text{Credibility}_i
+  &= \beta_0 + \beta_1 \text{Influencer}_i \\
+  &\quad + \beta_2 \text{ExpertTrustIndex}_i + \beta_3 \text{HealthEngagementIndex}_i \\
+  &\quad + \beta_4 \text{Age}_i + \beta_5 \text{Gender}_i + \beta_6 \text{Education}_i \\
+  &\quad + \varepsilon_i
+\end{aligned}
+$$ {#eq-model3}
+- A model with prior indexes and an interaction term: 
+$$
+\begin{aligned}
+\text{Credibility}_i
+  &= \beta_0 + \beta_1 \text{Influencer}_i \\
+  &\quad + \beta_2 \text{HealthEngagementIndex}_i \\
+  &\quad + \beta_3 \left(\text{Influencer}_i \times \text{HealthEngagementIndex}_i\right) \\
+  &\quad + \varepsilon_i
+\end{aligned}
+$$ {#eq-model4}
+
+### Regression Results
+We've included three analyses and results tables below:
+
+#### Red Meat Claims
+![Red Meat Regression](report_sections/images/meat_regression.png){#fig-meatreg width=90% fig-align="center" fig-pos="H"}
+
+Starting with the causal effect on red meat claims, we do see an effect between influencers and experts, but the results are not statistically significant. As we added covariates, our $R^2$ goes up, which is a good sign, since the model is doing a better job of capturing the variation in the data, but the treatment effect remains statistically insignificant. Our standard errors do go down though, meaning our actual treatment effect region narrows, indicating that there might be an effect there, but that our dataset is simply underpowered. We do see a statistically significant effect for being previously engaged in health content via the Health Engagement Index though, showing that prior biases do affect credibility.
+
+#### Seed Oil Claims
+![Seed Oil Regression](report_sections/images/oil_regression.png){#fig-oilreg width=90% fig-align="center" fig-pos="H"}
+
+Moving to the seed oil claims, much of the results from the red meat claims are mirrored here. The basic model does seem to have a statistically significant treatment effect on first pass, but our $R^2$ is low, and when we add more covariates, the statistical significance of the effect goes away. We do see a statistically significant effect on both prior bias indexes though (Expert Trust Index and Health Engagement Index), fueling our claim that these biases impact credibility.
+
+#### Pooled Claims with Internal Fixed Effects
+![Pooled Within-Subject Regressions](report_sections/images/pooled_regression_nodem.png){#fig-pooled width=90% fig-align="center" fig-pos="H"}
+
+Lastly, since we were able to run a within-subject experiment by showing all participants both claims, we pooled both red meat and seed oil responses while controlling for each individual to boost the power of our analysis and evaluate the cumulative effect. It is here where we see a statistically significant treatment effect across all models. With double the responses, we have more power and do see that expert claims influence credibility. However, the effect is quite small (0.3). 
+
+### Diagnostic Checks
+Before we move on from our results, we ran some diagnostic tests to evaluate any bias in our data:
+
+#### Attrition Check
+We examined completion rates of the survey between various treatment group combinations and saw no statistically significant difference in attrition. This was expected since we only included those who completed the survey to begin with.
+
+![Attrition Analysis](report_sections/images/attrition.png){#fig-attrition width=90% fig-align="center" fig-pos="H"}
+
+#### Attention & Time Checks
+Before we limited our population to only those who passed both attention checks, we did see evidence of a difference between those who completed all, some, or none of the attention checks. This solidified our decision to drop those who didn't pass both attention checks.
+
+![Attention Check Effects](report_sections/images/attention.png){#fig-attention width=90% fig-align="center" fig-pos="H"}
+
+We did see a slight effect of the amount of time spent answering the survey between treatment groups, but the effect size was so small, we deemed this issue insignificant.
+
+![Survey Duration Effects](report_sections/images/time.png){#fig-time width=90% fig-align="center" fig-pos="H"}
+
+#### Position Check
+Positioning of the treatment in relation to the dummies should not affect credibility scores, so we also tested for this and saw no difference there either.
+
+![Order / Position Effects](report_sections/images/position.png){#fig-position width=90% fig-align="center" fig-pos="H"}
+
+#### Randomization Order Check
+Lastly, we looked to see if there was any credibility difference depending on the ordering of which type of treatment claim is shown first, and here, we did see a statistically significant difference between red meat and seed oil claims. Expert meat credibility decreases if shown the influencer claim first, while expert seed oil credibility increases if shown the influencer claim first. The doesn't seem to be an explicit reason for this, but this is something we flagged for future investigation and may imply that the subject of the claim itself may affect the credibility of the intervention.
+
+![Randomization Effects](report_sections/images/rand_order.png){#fig-randomz width=90% fig-align="center" fig-pos="H"}

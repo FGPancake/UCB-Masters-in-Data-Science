@@ -1,0 +1,341 @@
+---
+title: "Untitled"
+author: "Shashi Shamarao"
+date: "2026-02-16"
+output:
+  pdf_document: default
+  html_document: default
+  latex_engine: xelatex
+---
+<!-- knit options in power.Rmd not needed here -->
+```{r setup, include=FALSE, eval=FALSE}
+knitr::opts_chunk$set(echo = ,TRUE)
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+```
+
+# Power Analysis 3
+
+We are designing a multi-factor design to assess the power using monte carlo simulation
+Factors to consider are:
+Source: Expert vs Influencer
+Content: Message vs Video or Both
+
+
+Cells:
+  
+- Expert-Message
+- Expert-Video
+- Expert-Both
+- Influencer-Message
+- Influencer-Video
+- Influencer-Both
+
+Now pick the cell means that encode the interaction we care about
+Example "true" means:
+
+- Expert-Message - 4.8
+- Expert-Video - 5.0
+- Expert-Both - 5.5 (Expert video and message does slightly better)
+- Influencer-Message - 4.2 
+- Influencer-Video - 4.6
+- Influencer-Both - 4.9
+
+```{r parameters-1, warning=FALSE, message=FALSE, include = FALSE}
+params1 <- list(
+  # Effect sizes (on raw scale, SD = 1.5)
+  expert_main = 0.35,           # Expert effect in written format
+  influencer_main = 0.35,       # Influencer effect in written format
+  expert_video_int = 0.15,      # Additional effect for expert on video
+  expert_both_int = 0.15,       # Additional effect for expert with both
+  influencer_video_int = 0.15,  # Additional effect for influencer on video
+  influencer_both_int = 0.15,   # Additional effect for influencer with both
+
+  # Pre-test coefficients
+  pretest_coef = 0.55,          # Pre-test predicts post-test
+
+  # Covariate effects (small)
+  age_coef = 0.08,
+  gender_coef = 0.10,
+  trust_science_coef = 0.12,
+  prior_belief_coef = 0.10,
+  nutrition_literacy_coef = 0.08,
+  trust_experts_coef = 0.15,
+  trust_influencers_coef = 0.10,
+
+  # Variance parameters
+  outcome_sd = 1.5,             # Target SD for outcome
+  icc = 0.5,                    # Intra-class correlation (pre-post)
+
+  # Scale parameters
+  intercept = 4.0,              # Baseline for control-written
+  scale_min = 1,
+  scale_max = 7,
+
+  # Covariate distribution parameters
+  age_mean = 35,
+  age_sd = 12,
+  trust_science_mean = 5,
+  trust_science_sd = 1.2,
+  prior_belief_mean = 4,
+  prior_belief_sd = 1.3,
+  nutrition_literacy_mean = 4,
+  nutrition_literacy_sd = 1.2,
+  trust_experts_mean = 5,
+  trust_experts_sd = 1.3,
+  trust_influencers_mean = 4,
+  trust_influencers_sd = 1.4
+)
+```
+
+```{r generate-covariates, warning=FALSE, message=FALSE, echo=FALSE, include = FALSE}
+generate_covariates <- function(n, params1) {
+  data.frame(
+    participant_id = 1:n,
+    age = pmin(80, pmax(18, rnorm(n, params1$age_mean, params1$age_sd))),
+    gender = rbinom(n, 1, 0.5),
+    trust_science = pmin(7, pmax(1, rnorm(n, params1$trust_science_mean, params1$trust_science_sd))),
+    prior_belief = pmin(7, pmax(1, rnorm(n, params1$prior_belief_mean, params1$prior_belief_sd))),
+    nutrition_literacy = pmin(7, pmax(1, rnorm(n, params1$nutrition_literacy_mean, params1$nutrition_literacy_sd))),
+    trust_experts = pmin(7, pmax(1, rnorm(n, params1$trust_experts_mean, params1$trust_experts_sd))),
+    trust_influencers = pmin(7, pmax(1, rnorm(n, params1$trust_influencers_mean, params1$trust_influencers_sd)))
+  )
+}
+```
+
+```{r assign-treatment, warning=FALSE, message=FALSE, include = FALSE}
+assign_conditions <- function(n) {
+  # Create all 9 conditions (3 sources × 3 formats)
+  conditions <- expand.grid(
+    source = c("Control", "Expert", "Influencer"),
+    format = c("Written", "Video", "Both")
+  )
+
+  # Randomly assign participants to conditions
+  assignments <- conditions[sample(1:9, n, replace = TRUE), ]
+
+  # Create dummy variables
+  data.frame(
+    participant_id = 1:n,
+    source = assignments$source,
+    format = assignments$format,
+    Expert = as.integer(assignments$source == "Expert"),
+    Influencer = as.integer(assignments$source == "Influencer"),
+    Video = as.integer(assignments$format == "Video"),
+    Both = as.integer(assignments$format == "Both")
+  )
+}
+```
+
+```{r pre-test-scores, warning=FALSE, message=FALSE, echo=FALSE, include = FALSE}
+generate_pretest <- function(covariates, params1) {
+  with(covariates, {
+    # linear predictor for pretest, centered around intercept
+    eta_pre <- params1$intercept +
+      params1$age_coef              * scale(age,   scale = FALSE) +
+      params1$gender_coef           * gender +
+      params1$trust_science_coef    * scale(trust_science,      scale = FALSE) +
+      params1$prior_belief_coef     * scale(prior_belief,       scale = FALSE) +
+      params1$nutrition_literacy_coef * scale(nutrition_literacy, scale = FALSE) +
+      params1$trust_experts_coef    * scale(trust_experts,      scale = FALSE) +
+      params1$trust_influencers_coef* scale(trust_influencers,  scale = FALSE)
+
+    # residual variance for pretest (same SD as outcome for simplicity)
+    pre <- rnorm(length(eta_pre), mean = eta_pre, sd = params1$outcome_sd)
+
+    # clamp to Likert range
+    pmin(params1$scale_max, pmax(params1$scale_min, pre))
+  })
+}
+```
+
+```{r post-test-scores, warning=FALSE, message=FALSE, echo=FALSE, include = FALSE}
+generate_posttest <- function(covariates, treatment, pretest, params1) {
+n <- nrow(covariates)
+
+  # random intercept per participant to induce ICC between pre and post
+  # ICC = tau^2 / (tau^2 + sigma^2) -> solve for tau^2
+  sigma2 <- params1$outcome_sd^2
+  tau2   <- params1$icc * sigma2 / (1 - params1$icc)
+  subj_re <- rnorm(n, mean = 0, sd = sqrt(tau2))
+
+  # treatment effects (3x3: source x format)
+  with(cbind(covariates, treatment), {
+    # base = control-written
+    trt_effect <-
+      Expert     * params1$expert_main +
+      Influencer * params1$influencer_main +
+      Expert     * Video * params1$expert_video_int +
+      Expert     * Both  * params1$expert_both_int +
+      Influencer * Video * params1$influencer_video_int +
+      Influencer * Both  * params1$influencer_both_int
+
+    # pretest effect
+    pre_effect <- params1$pretest_coef * pretest
+
+    # covariate effects (applied to post)
+    cov_effect <- params1$age_coef              * scale(age,   scale = FALSE) +
+                  params1$gender_coef           * gender +
+                  params1$trust_science_coef    * scale(trust_science,     scale = FALSE) +
+                  params1$prior_belief_coef     * scale(prior_belief,      scale = FALSE) +
+                  params1$nutrition_literacy_coef * scale(nutrition_literacy, scale = FALSE) +
+                  params1$trust_experts_coef    * scale(trust_experts,     scale = FALSE) +
+                  params1$trust_influencers_coef* scale(trust_influencers, scale = FALSE)
+
+    eta_post <- params1$intercept + trt_effect + pre_effect + cov_effect + subj_re
+
+    post <- rnorm(n, mean = eta_post, sd = params1$outcome_sd)
+
+    pmin(params1$scale_max, pmax(params1$scale_min, post))
+  })
+}
+```
+
+
+```{r simulate-scores, warning=FALSE, message=FALSE, include = FALSE}
+simulate_dataset <- function(n, params1) {
+  # covariates and treatment assignment
+  covariates <- generate_covariates(n, params1)
+  treatment  <- assign_conditions(n)
+
+  # merge
+  dat_wide <- merge(covariates, treatment, by = "participant_id")
+
+  # pre and post
+  dat_wide$pre  <- generate_pretest(dat_wide, params1)
+  dat_wide$post <- generate_posttest(dat_wide, treatment, dat_wide$pre, params1)
+
+  # manual wide -> long to keep participant_id as grouping factor
+  pre_long <- dat_wide
+  pre_long$time    <- factor("pre",  levels = c("pre", "post"))
+  pre_long$outcome <- pre_long$pre
+
+  post_long <- dat_wide
+  post_long$time    <- factor("post", levels = c("pre", "post"))
+  post_long$outcome <- post_long$post
+
+  long <- rbind(
+    pre_long[,  c("participant_id","time","source","format",
+                  "age","gender","trust_science","prior_belief",
+                  "nutrition_literacy","trust_experts","trust_influencers",
+                  "outcome")],
+    post_long[, c("participant_id","time","source","format",
+                  "age","gender","trust_science","prior_belief",
+                  "nutrition_literacy","trust_experts","trust_influencers",
+                  "outcome")]
+  )
+
+  long$source <- factor(long$source, levels = c("Control","Expert","Influencer"))
+  long$format <- factor(long$format, levels = c("Written","Video","Both"))
+  long$participant_id <- factor(long$participant_id)
+  
+  long
+}
+```
+
+```{r analyze-dataset, warning=FALSE, message=FALSE, include = FALSE}
+analyze_dataset <- function(dat_long) {
+  # make sure factors are correctly specified
+  dat_long$source <- factor(dat_long$source, levels = c("Control","Expert","Influencer"))
+  dat_long$format <- factor(dat_long$format, levels = c("Written","Video","Both"))
+  dat_long$time   <- factor(dat_long$time,   levels = c("pre","post"))
+
+  # fit mixed model: between (source, format), within (time), random intercept per participant
+  fit <- lmer(
+    outcome ~ source * format * time +
+      age + gender + trust_science + prior_belief +
+      nutrition_literacy + trust_experts + trust_influencers +
+      (1 | participant_id),
+    data = dat_long,
+    REML = FALSE
+  )
+
+  # test the 3-way interaction using type III F-test
+  an <- anova(fit, type = 3)  # from lmerTest
+  # inspect once interactively: print(rownames(an))
+
+  term_name <- "source:format:time"
+  rn  <- rownames(an)
+  idx <- match(term_name, rn)
+
+  if (is.na(idx)) {
+    p_int <- NA_real_
+    conv  <- FALSE
+  } else {
+    p_int <- an[idx, "Pr(>F)"]
+    conv  <- !is.na(p_int)
+  }
+
+  list(p_int = p_int, converged = conv)
+}
+```
+
+```{r estimate-power, warning=FALSE, message=FALSE, include = FALSE, cache=TRUE, results="hide"}
+estimate_power <- function(n, params1, nsim = 1000, alpha = 0.05, verbose = FALSE) {
+  pvals      <- numeric(nsim)
+  converged  <- logical(nsim)
+
+  for (i in 1:nsim) {
+    dat_long        <- simulate_dataset(n, params1)
+    res             <- analyze_dataset(dat_long)
+    pvals[i]        <- res$p_int
+    converged[i]    <- res$converged
+
+    if (verbose && i %% 50 == 0) {
+      cat("Sim", i, "of", nsim, "\n")
+    }
+  }
+
+  # estimated power and some diagnostics
+  list(
+    n               = n,
+    nsim            = nsim,
+    power           = mean(pvals < alpha, na.rm = TRUE),
+    convergence_rate= mean(converged),
+    mean_p          = mean(pvals, na.rm = TRUE),
+    pvals           = pvals
+  )
+}
+
+# Example: 300 participants total, nsim = 500 for quick check
+res_300 <- estimate_power(n = 300, params1 = params1, nsim = 500, alpha = 0.05, verbose = TRUE)
+res_300$power
+res_300$convergence_rate
+```
+
+```{r power-grid, include = FALSE, warning=FALSE, message=FALSE, cache=TRUE, echo =TRUE}
+library(dplyr)
+
+n_grid <- c(150, 200, 250, 300, 350)  # total participants
+nsim   <- 500
+
+power_grid <- lapply(n_grid, function(nn) {
+  cat("N =", nn, "\n")
+  out <- estimate_power(n = nn, params1 = params1, nsim = nsim, alpha = 0.05)
+  data.frame(
+    n       = nn,
+    power   = out$power,
+    conv_rt = out$convergence_rate
+  )
+}) %>% bind_rows()
+
+```
+```{r plot-results, warning=FALSE, message=FALSE, include = FALSE, echo = TRUE}
+library(ggplot2)
+
+power3 <- ggplot(power_grid, aes(x = n, y = power)) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(limits = c(0, 1)) +
+  labs(
+    x = "Total sample size (N)",
+    y = "Estimated power",
+    title = "Monte Carlo power vs. total N for 3x3 mixed design"
+  ) +
+  theme_minimal()
+power_3 <- power_grid
+```
+```{r}
+print(power_grid)
+```
+
+>>>>>>> 7b86b9a (restoring Zev's version and adding in design descriptions)

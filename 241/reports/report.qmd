@@ -1,0 +1,119 @@
+---
+title:  "Nutritional Source Cues:"
+subtitle: "Social Media Nutrition Credibility"
+date: today
+date-format: long 
+author: 
+  - name: Kathy Camp
+    affiliations: 
+    - name: UC Berkeley, School of Information 
+      address: 102 South Hall Drive
+      city: Berkeley, CA 
+      postal-code: 94720
+  - name: Shashi Shamarao
+    affiliations: 
+    - name: UC Berkeley, School of Information 
+      address: 102 South Hall Drive
+      city: Berkeley, CA 
+      postal-code: 94720
+  - name: Gerardo Solis
+    affiliations: 
+    - name: UC Berkeley, School of Information 
+      address: 102 South Hall Drive
+      city: Berkeley, CA 
+      postal-code: 94720
+  - name: Ryan Farhat-Sabet
+    affiliations: 
+    - name: UC Berkeley, School of Information 
+      address: 102 South Hall Drive
+      city: Berkeley, CA 
+      postal-code: 94720
+  - name: Zev Rosen
+    affiliations: 
+    - name: UC Berkeley, School of Information 
+      address: 102 South Hall Drive
+      city: Berkeley, CA 
+      postal-code: 94720
+format: 
+  pdf: 
+    documentclass: scrartcl
+    csl: https://www.zotero.org/styles/chicago-author-date
+    header-includes:
+      - \usepackage{geometry}
+      - \usepackage{setspace}
+      - \usepackage{pdfpages}
+      - \usepackage{tocloft}   
+      - \setkomafont{sectionentry}{\normalfont}
+      - \setkomafont{sectionentrypagenumber}{\normalfont}
+      - \setlength{\cftbeforesecskip}{1pt}    
+      - \setlength{\cftbeforesubsecskip}{0pt}         
+    number-sections: true
+toc: true 
+toc-depth: 2
+colorlinks: true
+cap-location: bottom
+tbl-cap-location: top
+execute: 
+  echo: false 
+  warning: false 
+  message: false 
+bibliography: references.bib
+reference-section-title: References
+link-citations: true
+---
+
+```{r load packages, include=FALSE}
+library(here)
+library(tidyr)
+library(dplyr)
+library(haven)
+library(broom)
+library(cowplot)
+library(ggplot2)
+library(car)
+library(ggfortify)
+library(sandwich)
+library(readr)
+library(data.table)
+library(stargazer)
+library(lmtest)
+```
+<!-- NOTE: -->
+<!-- References are saved in the /references.bib file use the same format. -->
+<!-- Examples: -->
+<!--  - at the end of a sentence [@zhang2023] -->
+<!--  - @zhang2023 is part of the sentence  -->
+<!--  - [@zhang2023] = (Author, Year) -->
+<!--  - @zhang2023 = Author (Year) -->
+<!-- Use above examples in the sections below when needed -->
+\newpage
+
+## Introduction
+{{< include report_sections/introduction.qmd >}}
+
+## Background/Literature Review
+{{< include report_sections/lit_review.qmd >}}
+
+## Methodology
+{{< include report_sections/methodology.qmd >}}
+
+## Results
+{{< include report_sections/results.qmd >}}
+
+## Discussion
+{{< include report_sections/discussion.qmd >}}
+
+## Conclusion
+{{< include report_sections/conclusion.qmd >}}
+
+\newpage
+
+## References
+::: {#refs}
+:::
+
+\newpage
+
+## Appendix 
+{{< include report_sections/appendix.qmd >}}
+

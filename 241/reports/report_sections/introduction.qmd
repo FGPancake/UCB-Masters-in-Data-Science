@@ -1,0 +1,27 @@
+<!-- Intro Start here (No title needed) -->
+
+Social media has become a primary avenue for many people to consume information such as news, health advice, entertainment, and many other topics. With the use of AI, social media has become more influential in targeting individuals with advertising and other information. To the most extent, information related to entertainment, advertisements might be okay. However, when individuals are exposed to health-related information, not only experts in this field are sharing their perspective, we are also seeing many influencers sharing their perspective based on their experience, their observations, etc. 
+
+While often influencers generate higher volume of engagement and visibility, experts are mostly considered as credible due to their knowledge, education, and expertise. This raises an important question, does the source of information itself shape how the information is perceived by users and how do they act on this advice?
+
+In real-world contexts, it's challenging to determine the effect of the source because posts from experts and influencers vary across multiple dimensions, including varying audiences, and presentation styles. Consequently, observational comparisons cannot accurately assess whether differences in engagement or credibility are genuinely influenced by the source or if they are due to these confounding factors.
+
+To address this challenge, this experiment utilizes a randomized controlled experiment that keeps the content of a nutritional message consistent while varying only the source label (either expert or influencer). By randomly assigning participants to different conditions, the design isolates the causal impact of source cues on key outcomes, such as perceived credibility and trust. This method allows for a clear examination of whether labeling information as originating from an expert rather than an influencer significantly changes how individuals evaluate and respond to nutritional content.
+
+### Research Question
+Are expert recommendations perceived as more credible than non-expert recommendations in the context of social media nutritional posts or recommendations?
+
+### Hypotheses
+
+#### Null Hypothesis (H0):
+There is no difference in credibility measures, such as accuracy, authenticity, and believability, between participants exposed to expert and influencer source cues.
+
+$H_0 : E[Y|Expert] = E[Y|Influencer]$
+
+
+#### Alternative Hypothesis (H1):
+Participants exposed to the expert source cue will report higher credibility measures, such as accuracy, authenticity, and believability, compared to those exposed to the influencer source cue.
+
+$H_a : E[Y|Expert] > E[Y|Influencer]$
+
+where Y represents outcome such as perceived credibility, trust, or behavioral intention.

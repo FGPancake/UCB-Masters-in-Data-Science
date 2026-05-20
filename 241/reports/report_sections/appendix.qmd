@@ -1,0 +1,48 @@
+<!-- Start here (No title needed) -->
+## Appendix A: Survey Flow
+![](report_sections/appendix_materials/survey_flow_diagram.png){fig-align="center"}
+
+Survey flow diagram illustrating treatment assignment and measurement sequence.
+
+<!-- ## Appendix B: Treatment -->
+
+```{=latex}
+\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{section}{\protect\numberline{}Appendix B: Treatment}
+
+
+\includepdf[
+  pages=1,
+  scale=0.8,
+  pagecommand={\thispagestyle{plain}\section*{Appendix B: Treatment}}
+]{report_sections/appendix_materials/treatment_posts.pdf}
+
+\includepdf[
+  pages=2-,
+  scale=0.8,
+  pagecommand={}
+]{report_sections/appendix_materials/treatment_posts.pdf}
+```
+
+<!-- This one will be the last item -->
+<!-- ## Appenndix C: Survey -->
+
+```{=latex}
+\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{section}{\protect\numberline{}Appendix C: Survey}
+
+
+\includepdf[
+  pages=1,
+  scale=0.8,
+  pagecommand={\thispagestyle{plain}\section*{Appendix C: Survey}}
+]{report_sections/appendix_materials/241_survey.pdf}
+
+\includepdf[
+  pages=2-,
+  scale=0.8,
+  pagecommand={}
+]{report_sections/appendix_materials/241_survey.pdf}
+```

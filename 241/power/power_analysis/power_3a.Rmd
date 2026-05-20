@@ -1,0 +1,236 @@
+---
+title: "Untitled"
+author: "Shashi Shamarao"
+date: "2026-02-17"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+knitr::opts_chunk$set(echo = TRUE)
+install.packages("ez")
+library(ez)
+library(pwr)
+library(pwrss)
+library(data.table)
+library(ggplot2)
+library(knitr)
+library(dplyr)
+library(tidyr)
+library(car)
+library(lme4)
+library(lmerTest)
+```
+
+## R Markdown
+We are designing a multi-factor design to assess the power using monte carlo simulation
+Factors to consider are:
+Source: Expert vs Influencer
+Content: Message vs Video or Both
+
+
+Cells:
+Expert-Message
+Expert-Video
+Expert-Both
+Influencer-Message
+Influencer-Video
+Influencer-Both
+
+Now pick the cell means that encode the interaction we care about
+Example "true" means:
+Expert-Message - 4.8
+Expert-Video - 5.0
+Expert-Both - 5.5 (Expert video and message does slightly better)
+Influencer-Message - 4.2 
+Influencer-Video - 4.6
+Influencer-Both - 4.9
+
+## Global variables with default values
+```{r cars}
+# Global True parameters of the world
+mu_Text_Expert   <- 4.7      # true mean in control
+mu_Video_Expert <- 4.9
+mu_Both_Expert <- 5.35 # (using the effect_size for both text and video for expert and influencer at 0.35)
+  
+mu_Text_Influencer <- 4.4
+mu_Video_Influencer <- 4.7
+mu_Both_Influencer <- 5.0
+
+sigma        <- 1      # common standard deviation
+rho <- 0.5 # correlation among repeated measures (rough, simple)
+alpha        <- 0.05   # significance level
+```
+
+## Simulare one dataset for a given n per cell
+1. We will simulate outcomes for each of the 6 cells
+2. Run Anova for 2X3
+3. Return whether LanguageXGrammar interaction is significant( p< alpha)
+
+## One Experiment
+```{r simulate_one_experiment, echo=FALSE}
+simulate_one_experiment <- function(n_per_group) {
+  # between-subjects groups
+  groups <- c('Expert', 'Influencer')
+  
+  # Subject IDs and group assignment 
+  Subject <- factor(1:(2 * n_per_group))
+  Group <- factor(rep(groups, each = n_per_group))
+  
+  # Factor levels
+  content_levels <- c('Text', 'Video', 'Both')
+  
+  # Build long data: each subject * each content
+  dat <- expand.grid(
+    Subject = Subject,
+    Content = content_levels
+  )
+  dat$Group <- Group[dat$Subject]
+  
+  # Assign true mean for each cell 
+  dat$mu <- with(dat, 
+                 ifelse(Group == "Expert" & Content == "Text", mu_Text_Expert,
+                 ifelse(Group == "Expert" & Content == "Video", mu_Video_Expert,
+                 ifelse(Group == "Expert" & Content == "Both", mu_Both_Expert,
+                 ifelse(Group == "Influencer" & Content == "Text", mu_Text_Influencer,
+                 ifelse(Group == "Influencer" & Content == "Video", mu_Video_Influencer,
+                 mu_Both_Influencer ))))))
+  
+  # subject random effect to induce correlation among the 3 formats
+  subject_effect <- rnorm(length(Subject), mean = 0, sd = sqrt(rho) * sigma)
+  dat$subj_eff <- subject_effect[dat$Subject]
+  
+  # condition-specific residual noise
+  dat$eps <- rnorm(nrow(dat), mean=0, sd=sqrt(1-rho) * sigma)
+  
+  # Generate outcome: Y ~ Normal(mu_cell, sigma)
+  dat$Y <- dat$mu + dat$subj_eff + dat$eps
+  
+  # Linear mixed model: random intercept per subject
+  fit <- lmer(Y ~ Group * Content + (1 | Subject), data = dat)
+
+  # Get p-value for Group:Content interaction
+  an  <- anova(fit, type = 3)  # from lmerTest
+  p_int <- an["Group:Content", "Pr(>F)"]
+
+  reject <- p_int < alpha
+  return(reject)
+}
+```
+
+```{r estimate_power}
+estimate_power <- function(n_per_group,
+                           sims_coarse = 300,
+                           sims_fine = 1500,
+                           threshold = 0.08,
+                           target_power = 0.8) {
+  
+  #calculate coarse estimate
+  p_coarse <- mean(replicate(sims_coarse, 
+                             simulate_one_experiment(n_per_group)))
+  
+  if (abs(p_coarse - target_power) > threshold) {
+    return(p_coarse)  # good enough if far away
+  } else {
+    # refine when close to target
+    p_fine <- mean(replicate(sims_fine, simulate_one_experiment(n_per_group)))
+    return(p_fine)
+  }
+}
+
+# # example: power when we have 30 per group
+set.seed(123)
+estimate_power(30)
+```
+
+```{r power_changes}
+set.seed(123)
+n_grid <- c(50, 60, 80, 100, 200, 300, 500, 750, 1000)
+
+power_grid <- sapply(n_grid, estimate_power)
+
+power_result <- data.frame(
+  n_subjects = n_grid, 
+  total_N = n_grid * 2,
+  estimated_power = power_grid
+)
+
+# find closest n for a target power
+find_n_from_grid <- function(target_power) {
+  idx <- which.min(abs(power_result$estimated_power - target_power))
+  power_result[idx, ]
+}
+
+power_80 <- find_n_from_grid(0.80)
+power_95 <- find_n_from_grid(0.95)
+
+power_result
+power_80
+power_95
+
+cat("Closest samples to meet power 80%: ", as.character(power_80$estimated_power), "\n")
+cat("Closest samples to meet power 80%: ", as.character(power_95$estimated_power), "\n")
+```
+
+```{r power-analysis-80 echo=FALSE}
+# Power analysis at 80%
+# power_analysis_80 <- function(target_power = 0.8, 
+#                         start = 100,
+#                           max = 400, 
+#                           step = 40)
+#  {
+#  n  <- start
+#  pw <- estimate_power(n)
+#  while (pw < target_power && n <= max) {
+#    n  <- n + step
+#    pw <- estimate_power(n)
+#  }
+#  list(n_per_group = n,
+#       total_subjects = 2 * n,
+#       estimated_power = pw)
+#}
+
+#set.seed(123)
+#power_analysis_80(0.80)
+```
+
+```{r power-analysis-95 echo=FALSE}
+# Power analysis at 95%
+# power_analysis_95 <- function(target_power = 0.95, 
+#                            start = 200, 
+#                            max = 500, 
+#                            step = 50)
+#   {
+#   n  <- start
+#   pw <- estimate_power(n)
+#   while (pw < target_power && n <= max) {
+#     n  <- n + step
+#     pw <- estimate_power(n)
+#   }
+#   list(n_per_group = n,
+#        total_subjects = 2 * n,
+#        estimated_power = pw)
+# }
+# 
+# set.seed(123)
+# power_analysis_95(0.95)
+
+```
+
+
+```{r plot-results, warning=FALSE, message=FALSE echo=FALSE}
+total_subjects <- length(n_grid)
+ggplot(power_result,
+       aes(x = total_N, y = estimated_power)) +
+  geom_line(color = "steelblue", linewidth = 1) +
+  geom_point(color = "steelblue", size = 2) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.1)) +
+  labs(
+    title = "Estimated power vs total N (mixed 2x3 design)",
+    x = "Total N (participants)",
+    y = "Power"
+  ) +
+  theme_minimal()
+```

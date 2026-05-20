@@ -1,0 +1,51 @@
+<!-- Start here (No title needed) -->
+### Study Design
+This study employs a within-subject experimental design where individual subjects are exposed to four randomized Instagram posts consisting of two treatment posts with content attributed to either an expert or influencer. Treatments consist of the bio of an expert or influencer and their comments on a nutritional subject. The aim of the experiment is to estimate the average within-individual difference in perceived credibility between expert and influencer on nutritional content. The topics include two treatment conditions covering nutritional subjects (red meat and seed oils) and two filler posts (hydration and sleep).
+
+A within-subject design was preferred in response to our power analysis results, where a between-subject design was used. Results indicated the study would be heavily under-powered due to the limited number of observations obtainable in this study. The power analysis conducted using a between-subject design with an effect size of 0.3 (based on prior studies of similar interest) required more than 1300 observations to be sufficiently powered. To improve power, a within-subject design was implemented where subjects viewed all content.
+
+While power is improved in a within-subject design due to increased observations and leveraging within-person variation, there are a few drawbacks such as demand effects, hypothesis guessing, and subjects inferring the study’s intent. To address these issues, we increased the number of exposures from two to four by including filler content. To minimize study inference, all exposures were randomized on the condition that subjects are never exposed to both treatments consecutively.
+
+Table: **Within-Subject Design Combinations**
+
+|              | **Red Meat** | **Seed Oils** |
+|--------------|----------|-----------|
+| **Expert** | Expert cue + red meat claim | Expert cue + seed oils claim |
+| **Influencer** | Influencer cue + red meat claim | Influencer cue + seed oils claim |
+
+### Outcome Measures and Covariates
+
+The primary outcomes are participants' evaluations of each post's credibility, measured in perceived accuracy, authenticity, and believability. Responses were recorded on a 1–7 Likert scale, with higher values indicating greater perceived credibility. These measures were analyzed individually and combined into a composite credibility index (meat and oil expert credibility, meat and oil influencer credibility).
+
+Pre-treatment covariates include variables such as health literacy and confidence, use of social media for health and nutrition, and political alignment, along with indices capturing subjects’ baseline attitudes and behaviors on trust in experts and health engagement. The expert trust index was constructed by averaging response items related to trust in experts and influencers. Similarly, the health engagement index was constructed by averaging responses related to health behaviors and information seeking.
+
+In addition to primary outcomes and prior belief measures, the survey recorded completion time metrics, the sequence order of post exposure, and four attention checks. The first two attention checks were administered during pre-treatment questions, and the third and fourth were presented immediately following each social media treatment post viewed by each participant. The order of post presentation was recorded to assess whether the position of posts within the sequence affects outcome measures. 
+
+These attention checks were designed to assess respondent comprehension of survey questions and identify low-effort responses. Completion time measures were similarly used to evaluate the extent to which participants may have rushed through portions of the survey. Together, these measures allow for the detection of low-quality survey responses across treatment conditions.
+
+### Sample and Procedure
+
+Subjects were recruited through Pure Spectrum, an online panel provider. Using Pure Spectrum's demographic census data, demographic data was automatically populated and used to provide the necessary quotas for a target sample size of 250 subjects (though some quotas were exceeded in an attempt to achieve others). Qualtrics was the survey platform used to capture responses and demographics from participants redirected by Pure Spectrum.
+
+The survey consisted of multiple blocks generated in the Qualtrics platform. First, subjects were provided an introduction to the survey along with instructions and a consent block. Following consent, subjects completed demographic questions, pre-treatment measures assessing baseline attitudes and behaviors, and two attention checks.
+
+Once pre-treatment measures are completed, subjects are exposed to a sequence of social media posts. Each post first begins with an image of the author's bio including their handle, title, occupation, and number of followers -- and highlighting their credentials in the case of experts -- followed by a post commenting on a nutritional recommendation. The filler posts also followed this pattern (bio then post). Following each post, subjects answered a set of questions evaluating the content in terms of accuracy, authenticity, and believability. The survey then concludes with an outro statement thanking participants for completing the survey.
+
+![Survey flow diagram illustrating treatment assignment and measurement sequence](report_sections/appendix_materials/survey_flow_diagram.png){#fig-survey_flow width=90% fig-align="center" fig-pos="H"}
+
+### Randomization and Design Checks
+
+The order of post presentation was randomized at the individual level. To ensure internal validity and minimize order effects, both the assignment of topic to source type and the sequence in which the posts appeared were randomized. However, to reduce hypothesis guessing treatments were also randomized in a way where they never appeared one after the other in a given sequence. As shown below, first participants were randomized with respect to whether they saw a red meat post from an expert and a seed oil post from an influencer or the reverse. Next they were randomized with respect to the order in which they saw treatment and filler posts.
+
+![Randomization diagram](report_sections/appendix_materials/randomization.png){#fig-survey_flow width=75% fig-align="center"}
+
+Subjects were included in the analysis if they achieved a CAPTCHA score greater than or equal to 0.5, spent at least one third of the mean duration on the entire survey, and passed all attention checks. This restriction ensures that the sample consists of respondents who were not bots and engaged meaningfully with the survey content. 
+
+To assess the validity of the experimental design and evaluate potential sources of bias, we conduct a series of diagnostic checks focusing on randomization, respondent engagement, and potential order effects. First, we assess whether the randomized order of treatment exposure is independent of pre-treatment covariates. We examine whether the position of treatment within the sequence is systematically related to baseline characteristics such as race, age, and education. Evidence of such relationships would indicate potential imbalances in the randomization procedure.
+
+Second, to evaluate differential engagement across conditions, we examine whether attention and completion time vary systematically with treatment assignment and position within the sequence. These measures serve as proxies for respondent effort and allow us to detect whether certain conditions induce lower engagement or rushed responses.
+
+Finally, we assess whether the position of posts within the sequence affects outcome measures. Because participants are exposed to multiple treatments, responses to later posts may be influenced by fatigue, learning, or prior exposure. To account for this, we examine whether outcomes vary with position and whether treatment effects differ depending on when a post appears in the sequence.
+
+
+

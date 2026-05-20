@@ -1,0 +1,239 @@
+---
+title: "Diagnostic Checks"
+author: "Zev Rosen"
+date: "2026-04-11"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r libraries}
+library(tidyr)
+library(dplyr)
+library(lmtest)
+library(sandwich)
+library(stargazer)
+library(knitr)
+```
+
+```{r load_data}
+d = readRDS("clean_data_zr.rds")
+```
+
+```{r reshape_data}
+d_tidy <- d %>%
+  rename(
+    oil_infl_authentic  = post_oil_authentic,
+    oil_infl_believable = post_oil_believable,
+    dmy1_slp_attention  = attention1,
+    dmy2_wt_attention   = attention2,
+    oil_infl_attention  = attention_oil_inf,
+    oil_exp_attention   = attention_oil_exp,
+    meat_infl_attention = attention_meat_infl,
+    meat_exp_attention  = attention_meat_exp
+  ) %>%
+  pivot_longer(
+    cols = c(
+      meat_exp_accurate, meat_exp_authentic, meat_exp_believable, meat_infl_accurate,
+      meat_exp_attention, meat_infl_authentic, meat_infl_believable, meat_exp_cred,
+      meat_infl_cred, meat_infl_attention,
+      oil_exp_accurate, oil_exp_authentic, oil_exp_believable, oil_exp_cred,
+      oil_exp_attention, oil_infl_accurate, oil_infl_cred, oil_infl_authentic,
+      oil_infl_believable, oil_infl_attention,
+      dmy1_slp_accurate, dmy1_slp_authentic, dmy1_slp_believable, dmy1_slp_attention,
+      dmy2_wt_accurate, dmy2_wt_authentic, dmy2_wt_believable, dmy2_wt_attention
+    ),
+    names_to  = "variable",
+    values_to = "value"
+  ) %>%
+  mutate(
+    question = case_when(
+      grepl("^meat", variable) ~ "meat",
+      grepl("^oil",  variable) ~ "oil",
+      grepl("^dmy1", variable) ~ "dmy1",
+      grepl("^dmy2", variable) ~ "dmy2"
+    ),
+    inf_expert = case_when(
+      grepl("exp",  variable) ~ "expert",
+      grepl("infl", variable) ~ "influencer"
+    ),
+    metric = case_when(
+      grepl("accurate",  variable) ~ "accurate",
+      grepl("authentic", variable) ~ "authentic",
+      grepl("believable",variable) ~ "believable",
+      grepl("cred",      variable) ~ "cred",
+      grepl("attention", variable) ~ "attention"
+    )
+  ) %>%
+  group_by(across(-c(variable, value))) %>%
+  summarise(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = metric, values_from = value) %>%
+  mutate(
+    inf_expert          = ifelse(is.na(inf_expert), "", inf_expert),
+    question_inf_expert = trimws(paste0(question, inf_expert))
+  ) %>%
+  mutate(
+    position = case_when(
+      order_pattern == "tfft" & question == "meat" ~ 1,
+      order_pattern == "tfft" & question == "dmy1" ~ 2,
+      order_pattern == "tfft" & question == "dmy2" ~ 3,
+      order_pattern == "tfft" & question == "oil"  ~ 4,
+      order_pattern == "ftft" & question == "dmy1" ~ 1,
+      order_pattern == "ftft" & question == "meat" ~ 2,
+      order_pattern == "ftft" & question == "dmy2" ~ 3,
+      order_pattern == "ftft" & question == "oil"  ~ 4
+    )
+  ) %>%
+  select(ResponseId, condition_sequence, order_pattern, question, inf_expert,
+         question_inf_expert, position, accurate, authentic, believable, cred,
+         attention, everything()) %>%
+  filter(!(condition_sequence == "influencer_meat_expert_oil" &
+             question_inf_expert %in% c("meatexpert", "oilinfluencer"))) %>%
+  filter(!(condition_sequence == "expert_meat_influencer_oil" &
+             question_inf_expert %in% c("meatinfluencer", "oilexpert")))
+
+d_complete         <- d_tidy %>% filter(complete == 1)
+d_attention_passed <- d_complete %>% filter(SC0 == 0)
+```
+
+# Data Checks
+
+```{r data_checks, results='asis'}
+# Balance across question types
+table(d_complete$question, useNA = "ifany") %>%
+  as.data.frame() %>%
+  setNames(c("Question", "N")) %>%
+  kable(caption = "Row counts by question type", booktabs = TRUE)
+
+# Balance across source types
+table(d_complete$inf_expert, useNA = "ifany") %>%
+  as.data.frame() %>%
+  setNames(c("Source", "N")) %>%
+  kable(caption = "Row counts by source type", booktabs = TRUE)
+
+# Check for duplicate respondent-question combinations
+dupes <- d_complete %>%
+  count(ResponseId, question, inf_expert, question_inf_expert) %>%
+  filter(n > 1)
+cat("Duplicate respondent-question rows:", nrow(dupes), "\n\n")
+
+# Outcome variable summary statistics via stargazer
+d_complete %>%
+  select(accurate, authentic, believable, cred) %>%
+  as.data.frame() %>%
+  stargazer(
+    type         = "latex",
+    header       = FALSE,
+    title        = "Outcome Variable Summary Statistics",
+    summary.stat = c("n", "mean", "sd", "min", "max"),
+    covariate.labels = c("Accurate", "Authentic", "Believable", "Credibility Index")
+  )
+```
+
+\newpage
+# Diagnostic 1: Randomization Balance
+
+Tests whether treatment assignment (`condition_sequence`) predicts credibility — it should not in a well-randomized experiment.
+
+```{r randomization, results='asis'}
+model_order_meat <- lm(meat_cred ~ condition_sequence, data = d_attention_passed)
+model_order_oil  <- lm(oil_cred  ~ condition_sequence, data = d_attention_passed)
+
+se_order_meat <- sqrt(diag(vcovHC(model_order_meat, type = "HC1")))
+se_order_oil  <- sqrt(diag(vcovHC(model_order_oil,  type = "HC1")))
+
+stargazer(
+  model_order_meat, model_order_oil,
+  se               = list(se_order_meat, se_order_oil),
+  title            = "Randomization Balance (Condition Sequence)",
+  dep.var.labels   = c("Meat Credibility", "Oil Credibility"),
+  covariate.labels = c("Influencer Meat / Expert Oil"),
+  add.lines        = list(c("Robust SE", "Yes", "Yes")),
+  omit.stat        = c("f", "ser"),
+  type             = "latex",
+  header           = FALSE,
+  column.sep.width = "4pt"
+)
+```
+
+\newpage
+# Diagnostic 2: Order / Position Effects
+
+Tests whether question presentation order (`order_pattern`: `ftft` vs `tfft`) predicts credibility — it should not.
+
+```{r position, results='asis'}
+model_position_meat <- lm(meat_cred ~ order_pattern, data = d_attention_passed)
+model_position_oil  <- lm(oil_cred  ~ order_pattern, data = d_attention_passed)
+
+se_position_meat <- sqrt(diag(vcovHC(model_position_meat, type = "HC1")))
+se_position_oil  <- sqrt(diag(vcovHC(model_position_oil,  type = "HC1")))
+
+stargazer(
+  model_position_meat, model_position_oil,
+  se               = list(se_position_meat, se_position_oil),
+  title            = "Order / Position Effects",
+  dep.var.labels   = c("Meat Credibility", "Oil Credibility"),
+  covariate.labels = c("Order Pattern: tfft (vs ftft)"),
+  add.lines        = list(c("Robust SE", "Yes", "Yes")),
+  omit.stat        = c("f", "ser"),
+  type             = "latex",
+  header           = FALSE,
+  column.sep.width = "4pt"
+)
+```
+
+\newpage
+# Diagnostic 3: Attention Check Effects
+
+Tests whether failing attention checks (`SC0`) is associated with different credibility scores. Run on all completers (`d_complete`) to preserve variation in `SC0`.
+
+```{r attention, results='asis'}
+model_attention_meat <- lm(meat_cred ~ SC0, data = d_complete)
+model_attention_oil  <- lm(oil_cred  ~ SC0, data = d_complete)
+
+se_attention_meat <- sqrt(diag(vcovHC(model_attention_meat, type = "HC1")))
+se_attention_oil  <- sqrt(diag(vcovHC(model_attention_oil,  type = "HC1")))
+
+stargazer(
+  model_attention_meat, model_attention_oil,
+  se               = list(se_attention_meat, se_attention_oil),
+  title            = "Attention Check Effects",
+  dep.var.labels   = c("Meat Credibility", "Oil Credibility"),
+  covariate.labels = c("Failed Attention Checks (SC0)"),
+  add.lines        = list(c("Robust SE", "Yes", "Yes")),
+  omit.stat        = c("f", "ser"),
+  type             = "latex",
+  header           = FALSE,
+  column.sep.width = "4pt"
+)
+```
+
+\newpage
+# Diagnostic 4: Survey Duration Effects
+
+Tests whether time spent on the survey predicts credibility — a proxy for satisficing or rushing behavior.
+
+```{r duration, results='asis'}
+model_duration_meat <- lm(meat_cred ~ `Duration (in seconds)`, data = d_attention_passed)
+model_duration_oil  <- lm(oil_cred  ~ `Duration (in seconds)`, data = d_attention_passed)
+
+se_duration_meat <- sqrt(diag(vcovHC(model_duration_meat, type = "HC1")))
+se_duration_oil  <- sqrt(diag(vcovHC(model_duration_oil,  type = "HC1")))
+
+stargazer(
+  model_duration_meat, model_duration_oil,
+  se               = list(se_duration_meat, se_duration_oil),
+  title            = "Survey Duration Effects",
+  dep.var.labels   = c("Meat Credibility", "Oil Credibility"),
+  covariate.labels = c("Duration (seconds)"),
+  add.lines        = list(c("Robust SE", "Yes", "Yes")),
+  omit.stat        = c("f", "ser"),
+  type             = "latex",
+  header           = FALSE,
+  column.sep.width = "4pt"
+)
+```

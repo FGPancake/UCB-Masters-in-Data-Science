@@ -1,0 +1,412 @@
+---
+title: "power_2"
+author: "Ryan Farhat-Sabet"
+output: html_document
+---
+
+# Power Analysis 2
+
+Design scenario: 3x3 factorial between-subjects design testing the impact of source cues (expert, influencer, control) and stimulus type (video, written, both) on the credibility of nutrition recommendations. It includes a pre-test and post-test that measures the credibility of recommendations before and after the treatment. Power is estimated from OLS on post-test with pre-test as a covariate, using cluster-robust standard errors by participant. Suggested effect sizes in parameters section below (see Section 4 for justification).  
+
+```{r parameters, include =FALSE}
+params <- list(
+  # Effect sizes (on raw scale, SD = 1.5)
+  expert_main = 0.35,           # Expert effect in written format
+  influencer_main = 0.35,       # Influencer effect in written format
+  expert_video_int = 0.15,      # Additional effect for expert on video
+  expert_both_int = 0.15,       # Additional effect for expert with both
+  influencer_video_int = 0.15,  # Additional effect for influencer on video
+  influencer_both_int = 0.15,   # Additional effect for influencer with both
+
+  # Pre-test coefficients
+  pretest_coef = 0.55,          # Pre-test predicts post-test
+
+  # Covariate effects (small)
+  age_coef = 0.08,
+  gender_coef = 0.10,
+  trust_science_coef = 0.12,
+  prior_belief_coef = 0.10,
+  nutrition_literacy_coef = 0.08,
+  trust_experts_coef = 0.15,
+  trust_influencers_coef = 0.10,
+
+  # Variance parameters
+  outcome_sd = 1.5,             # Target SD for outcome
+  icc = 0.5,                    # Intra-class correlation (pre-post)
+
+  # Scale parameters
+  intercept = 4.0,              # Baseline for control-written
+  scale_min = 1,
+  scale_max = 7,
+
+  # Covariate distribution parameters
+  age_mean = 35,
+  age_sd = 12,
+  trust_science_mean = 5,
+  trust_science_sd = 1.2,
+  prior_belief_mean = 4,
+  prior_belief_sd = 1.3,
+  nutrition_literacy_mean = 4,
+  nutrition_literacy_sd = 1.2,
+  trust_experts_mean = 5,
+  trust_experts_sd = 1.3,
+  trust_influencers_mean = 4,
+  trust_influencers_sd = 1.4
+)
+```
+
+
+```{r generate_covariates, include = FALSE, echo =FALSE}
+generate_covariates <- function(n, params) {
+  data.frame(
+    participant_id = 1:n,
+    age = pmin(80, pmax(18, rnorm(n, params$age_mean, params$age_sd))),
+    gender = rbinom(n, 1, 0.5),
+    trust_science = pmin(7, pmax(1, rnorm(n, params$trust_science_mean, params$trust_science_sd))),
+    prior_belief = pmin(7, pmax(1, rnorm(n, params$prior_belief_mean, params$prior_belief_sd))),
+    nutrition_literacy = pmin(7, pmax(1, rnorm(n, params$nutrition_literacy_mean, params$nutrition_literacy_sd))),
+    trust_experts = pmin(7, pmax(1, rnorm(n, params$trust_experts_mean, params$trust_experts_sd))),
+    trust_influencers = pmin(7, pmax(1, rnorm(n, params$trust_influencers_mean, params$trust_influencers_sd)))
+  )
+}
+```
+
+```{r assign_treatment, include = FALSE, echo =FALSE}
+assign_conditions <- function(n) {
+  # Create all 9 conditions (3 sources × 3 formats)
+  conditions <- expand.grid(
+    source = c("Control", "Expert", "Influencer"),
+    format = c("Written", "Video", "Both")
+  )
+
+  # Randomly assign participants to conditions
+  assignments <- conditions[sample(1:9, n, replace = TRUE), ]
+
+  # Create dummy variables
+  data.frame(
+    participant_id = 1:n,
+    source = assignments$source,
+    format = assignments$format,
+    Expert = as.integer(assignments$source == "Expert"),
+    Influencer = as.integer(assignments$source == "Influencer"),
+    Video = as.integer(assignments$format == "Video"),
+    Both = as.integer(assignments$format == "Both")
+  )
+}
+```
+
+```{r pre-test_scores, include = FALSE, echo = FALSE}
+generate_pretest <- function(covariates, params) {
+  n <- nrow(covariates)
+
+  # Pre-test is influenced by baseline characteristics but not treatment
+  pretest_base <- params$intercept +
+    0.3 * (covariates$trust_science - params$trust_science_mean) +
+    0.2 * (covariates$prior_belief - params$prior_belief_mean) +
+    0.15 * (covariates$nutrition_literacy - params$nutrition_literacy_mean)
+
+  # Add random error (contributes to between-person variance)
+  pretest_error <- rnorm(n, 0, 0.8)
+
+  # Combine and bound
+  pretest <- pretest_base + pretest_error
+  pmin(params$scale_max, pmax(params$scale_min, pretest))
+}
+```
+
+```{r post-test_scores, include = FALSE, echo = FALSE}
+generate_posttest <- function(data, params) {
+  n <- nrow(data)
+
+  # Center age for easier interpretation
+  age_centered <- (data$age - params$age_mean) / 10  # Per 10 years
+
+  # Calculate systematic component
+  systematic <- params$intercept +
+    # Treatment main effects
+    params$expert_main * data$Expert +
+    params$influencer_main * data$Influencer +
+    # Treatment × Format interactions
+    params$expert_video_int * data$Expert * data$Video +
+    params$expert_both_int * data$Expert * data$Both +
+    params$influencer_video_int * data$Influencer * data$Video +
+    params$influencer_both_int * data$Influencer * data$Both +
+    # Pre-test effect (creates ICC)
+    params$pretest_coef * (data$pretest - params$intercept) +
+    # Covariate effects
+    params$age_coef * age_centered +
+    params$gender_coef * data$gender +
+    params$trust_science_coef * (data$trust_science - params$trust_science_mean) +
+    params$prior_belief_coef * (data$prior_belief - params$prior_belief_mean) +
+    params$nutrition_literacy_coef * (data$nutrition_literacy - params$nutrition_literacy_mean) +
+    params$trust_experts_coef * (data$trust_experts - params$trust_experts_mean) +
+    params$trust_influencers_coef * (data$trust_influencers - params$trust_influencers_mean)
+
+  # Calculate residual SD to achieve target ICC
+  # Total variance = between + within
+  # ICC = between / total
+  # We want: pretest explains some variance, residual provides rest
+  total_var <- params$outcome_sd^2
+  within_var <- total_var * (1 - params$icc)
+  residual_sd <- sqrt(within_var * 0.7)  # 0.7 factor accounts for covariate variance
+
+  # Add residual error
+  posttest <- systematic + rnorm(n, 0, residual_sd)
+
+  # Bound to scale
+  pmin(params$scale_max, pmax(params$scale_min, posttest))
+}
+```
+
+```{r simulate_data, include = FALSE}
+generate_data <- function(n, params) {
+  # Generate participant characteristics
+  covariates <- generate_covariates(n, params)
+  treatments <- assign_conditions(n)
+
+  # Merge
+  data <- merge(covariates, treatments, by = "participant_id")
+
+  # Generate outcomes
+  data$pretest <- generate_pretest(covariates, params)
+  data$posttest <- generate_posttest(data, params)
+
+  # Convert to long format (pre and post in separate rows)
+  data_long <- data %>%
+    select(participant_id, Expert, Influencer, Video, Both,
+           age, gender, trust_science, prior_belief, nutrition_literacy,
+           trust_experts, trust_influencers, pretest, posttest) %>%
+    pivot_longer(cols = c(pretest, posttest),
+                 names_to = "time",
+                 values_to = "credibility") %>%
+    mutate(post = as.integer(time == "posttest"))
+
+  return(data_long)
+}
+```
+
+
+```{r regression, cache=TRUE, include = FALSE}
+analyze_data <- function(data) {
+  # Keep only post-test
+  data_post <- data %>% dplyr::filter(time == "posttest")
+  
+  # Join pre-test
+  data_post <- data_post %>%
+    dplyr::left_join(
+      data %>% dplyr::filter(time == "pretest") %>%
+        dplyr::select(participant_id, pretest = credibility),
+      by = "participant_id"
+    )
+  
+  # Basic sanity checks
+  if (nrow(data_post) < 30) {
+    return(c(p_expert = NA_real_, p_influencer = NA_real_))
+  }
+  if (length(unique(data_post$Expert)) < 2 ||
+      length(unique(data_post$Influencer)) < 2) {
+    # no variation in treatment indicators
+    return(c(p_expert = NA_real_, p_influencer = NA_real_))
+  }
+  
+  # Fit OLS
+  model <- tryCatch(
+    lm(credibility ~ Expert + Influencer +
+         Video + Both +
+         Expert:Video + Expert:Both +
+         Influencer:Video + Influencer:Both +
+         pretest +
+         age + gender + trust_science + prior_belief +
+         nutrition_literacy + trust_experts + trust_influencers,
+       data = data_post),
+    error = function(e) NULL
+  )
+  
+  if (is.null(model)) {
+    return(c(p_expert = NA_real_, p_influencer = NA_real_))
+  }
+  
+  # Cluster-robust SEs
+  coef_test <- tryCatch({
+    vcov_cluster <- sandwich::vcovCL(model, cluster = ~ participant_id, type = "HC1")
+    lmtest::coeftest(model, vcov = vcov_cluster)
+  }, error = function(e) NULL)
+  
+  if (is.null(coef_test)) {
+    return(c(p_expert = NA_real_, p_influencer = NA_real_))
+  }
+  
+  # Extract p-values, guard against missing rows
+  p_expert <- if ("Expert" %in% rownames(coef_test)) coef_test["Expert", "Pr(>|t|)"] else NA_real_
+  p_influencer <- if ("Influencer" %in% rownames(coef_test)) coef_test["Influencer", "Pr(>|t|)"] else NA_real_
+  
+  c(p_expert = p_expert, p_influencer = p_influencer)
+}
+```
+
+
+```{r simulation, cache=TRUE, include = FALSE}
+run_one_simulation <- function(n, params, alpha = 0.05) {
+  data <- generate_data(n, params)
+  
+  p_values <- tryCatch(
+    analyze_data(data),
+    error = function(e) c(p_expert = NA_real_, p_influencer = NA_real_)
+  )
+  
+  # If p is NA, treat as not significant (0)
+  expert_sig <- if (is.finite(p_values["p_expert"])) as.numeric(p_values["p_expert"] < alpha) else 0
+  influencer_sig <- if (is.finite(p_values["p_influencer"])) as.numeric(p_values["p_influencer"] < alpha) else 0
+  
+  c(expert_sig = expert_sig, influencer_sig = influencer_sig)
+}
+
+```
+
+
+```{r power, cache=TRUE, include = FALSE}
+calculate_power <- function(n, params, n_sims = 1000, alpha = 0.05) {
+  # Run simulations
+  expert_results <- numeric(n_sims)
+  influencer_results <- numeric(n_sims)
+
+  for (i in 1:n_sims) {
+    sim_result <- run_one_simulation(n, params, alpha)
+    expert_results[i] <- sim_result["expert_sig"]
+    influencer_results[i] <- sim_result["influencer_sig"]
+  }
+
+  # Calculate power (proportion of significant results)
+  power_expert <- mean(expert_results)
+  power_influencer <- mean(influencer_results)
+
+  data.frame(
+    sample_size = n,
+    power_expert = power_expert,
+    power_influencer = power_influencer
+  )
+}
+```
+
+
+```{r power_simulation, cache=TRUE, include = FALSE}
+power_analysis <- function(n_range, params, n_sims = 1000, alpha = 0.05) {
+  # Progress indicator
+  cat("Running power analysis...
+")
+
+  # Run power calculation for each sample size
+  results_list <- lapply(n_range, function(n) {
+    cat(sprintf("  N = %d... ", n))
+    result <- calculate_power(n, params, n_sims, alpha)
+    cat("Done.
+")
+    return(result)
+  })
+
+  # Combine results
+  do.call(rbind, results_list)
+}
+```
+
+
+``` {r plotting, echo=FALSE, include = FALSE}
+plot_power_curves <- function(power_results) {
+  # Reshape for plotting
+  plot_data <- power_results %>%
+    pivot_longer(cols = c(power_expert, power_influencer),
+                 names_to = "effect",
+                 values_to = "power") %>%
+    mutate(effect = recode(effect,
+                          power_expert = "Expert vs Control",
+                          power_influencer = "Influencer vs Control"))
+
+  # Create plot
+  ggplot(plot_data, aes(x = sample_size, y = power, color = effect, linetype = effect)) +
+    geom_line(size = 1.2) +
+    geom_point(size = 2) +
+    geom_hline(yintercept = 0.80, linetype = "dashed", color = "gray40", size = 0.8) +
+    annotate("text", x = max(plot_data$sample_size) * 0.95, y = 0.82, 
+             label = "80% Power", color = "gray40", hjust = 1) +
+    scale_color_manual(values = c("Expert vs Control" = "#0072B2", 
+                                   "Influencer vs Control" = "#D55E00")) +
+    scale_linetype_manual(values = c("Expert vs Control" = "solid", 
+                                      "Influencer vs Control" = "dashed")) +
+    scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.1),
+                      labels = scales::percent_format(accuracy = 1)) +
+    labs(
+      title = "Power Analysis: Scenario 2 (Mixed Stimulus Formats)",
+      subtitle = "Effect size d = 0.35 (0.30-0.40 depending on format), 1000 simulations per sample size",
+      x = "Total Sample Size (N participants)",
+      y = "Statistical Power",
+      color = "Treatment Effect",
+      linetype = "Treatment Effect"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(
+      legend.position = "bottom",
+      plot.title = element_text(face = "bold", size = 14),
+      panel.grid.minor = element_blank()
+    )
+}
+```
+
+
+
+
+```{r, echo=FALSE, results="hide", include = FALSE}
+# Quick test at N = 150 with fewer sims
+test_result <- calculate_power(150, params, n_sims = 100, alpha = 0.05)
+test_result
+
+```
+
+
+
+```{r analysis, warning=FALSE, message=FALSE, cache=TRUE, include = FALSE}
+# Define sample size range (60 to 200 in steps of 10)
+sample_sizes <- seq(50, 500, by = 50)
+
+# Run power analysis
+# NOTE: This will take 2-3 minutes with 1000 simulations
+power_results <- power_analysis(
+  n_range = sample_sizes,
+  params = params,
+  n_sims = 1000,
+  alpha = 0.05
+)
+
+```
+```{r, include = FALSE, echo =TRUE}
+# Display results
+print(power_results)
+
+# Create and display plot
+power_plot <- plot_power_curves(power_results)
+print(power_plot)
+power_2 <- power_results
+```
+```{r}
+# Display results
+print(power_results)
+
+```
+
+```{r, cache=TRUE, include = FALSE}
+# Find sample size needed for 80% power
+n_for_80_expert <- power_results %>%
+  filter(power_expert >= 0.80) %>%
+  slice(1) %>%
+  pull(sample_size)
+
+n_for_80_influencer <- power_results %>%
+  filter(power_influencer >= 0.80) %>%
+  slice(1) %>%
+  pull(sample_size)
+
+
+print("Sample size for 80%% power (Expert):")
+print(n_for_80_expert)
+print("Sample size for 80%% power (Influencer):")
+print(n_for_80_influencer)
+```

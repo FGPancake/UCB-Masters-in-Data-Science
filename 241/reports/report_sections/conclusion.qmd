@@ -1,0 +1,13 @@
+<!-- Start here (No title needed) -->
+
+This study examined whether expert nutritional recommendations are perceived as more credible than non-expert recommendations in the context of social media nutritional posts. Using a within-subject design, we found limited evidence that expert recommendations are perceived as having greater credibility than those of influencers. For topic-specific models, the differences between expert and influencer posts were not significant, but in the pooled within-subjects model, expert content is rated as more credible (p < .05). We also find that preexisting beliefs related to trust in experts/influencers and to engagement with health topics are important predictors of how respondents rate posts. This suggests that source cues operate in conjunction with prior beliefs in credibility judgments. These results suggest that while expert source cues may improve credibility, the effect is small and dependent on context. However, given the study's limited power, the study findings should be interpreted cautiously. Nevertheless, the findings have implications for public health communication: perceptions of credibility in nutrition messaging depend on both characteristics of the messenger as well as characteristics of the audience.
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,31 @@
+---
+title: "Justification of Effect Sizes"
+author: "null"
+date: "2026-02-17"
+output:
+  html_document:
+    number_sections: true
+---
+
+
+# Justification of Effect Sizes
+
+Studies of the impact of source cues (expert vs. non-expert or influencer) on the credibility of information find mixed effects. The studies reviewed examined the impact of source cues in the context of health information (COVID, e-cigarettes), nutrition, politics, and the environment, and generally found that context impacted the effect of treatment. Lee et al. (2024) found a 0.84 increase in the trust in a health message when delivered by an expert (vs. influencer), and Hubner & Watts (2024) found a 0.49 increase in credibility of health information when delivered by an expert (vs. celebrity). In contrast, Case et al. (2022) found no significant effect of treatment because covariates (specifically political ideology) explained much of the variation in their data. In addition, Lissens et al. (2025) also found no effect of source cues on nutrition messaging to young people. Given this range, we suggest the effect size of our proposed treatment may be around 0.3 (slightly higher in a design that decreases standard errors). We believe that it will be lower than that found in health messaging, but potentially higher than Lissens found with a youth audience as nutritional messaging may be more salient for a mixed-age audience who might be more worried about the consequences of their choices. 
+
+# Bibliography
+
+<div style="padding-left: 2em; text-indent: -2em;">
+
+Case, C., Eddy, C., Hemrajani, R., Howell, C., Lyons, D., Sung, Y. H., & Connors, E. C. (2022). The effects of source cues and issue frames during COVID-19. *Journal of Experimental Political Science, 9*(3), 369–378.
+
+Hubner, A. Y., & Watts, J. (2024). Agents of change or counterarguing? Investigating the source credibility of celebrity versus traditional experts on health and political behaviors. *Journalism & Mass Communication Quarterly*, 10776990241297653.
+
+Lee, D. N., Liu, J., Stevens, H., Oduguwa, K., & Stevens, E. M. (2024). Does source matter? Examining the effects of health experts, friends, and social media influencers on young adult perceptions of Instagram e-cigarette education messages. *Drug and Alcohol Dependence, 258*, 111270.
+
+Lissens, M., Harff, D., & Schmuck, D. (2025). Responses to (Un)healthy advice: Processing and acceptance of health content creators’ nutrition misinformation by youth. *Appetite, 206*, 107812.
+
+Zhang, A. L., & Lu, H. (2023). Scientists as influencers: The role of source identity, self-disclosure, and anti-intellectualism in science communication on social media. *Social Media + Society, 9*(2), 20563051231180623.
+
+</div>
+
+
