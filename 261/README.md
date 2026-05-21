@@ -1,7 +1,11 @@
-# MIDS 266 Final Project
-NLP final project for DATASCI 266
+# MIDS 261 Final Project
+Flight Delay Classification final project for DATASCI 261
 
 ## Project Overview
-This project explores the NLP task of next-line generation for hip-hop lyrics, which is characterized by challenges related to rhyme, rhythm, slang, and creative phrasing. Models including GPT-2, Llama-3.2, and FLAN-T5 were evaluated with baselines, training, and fine-tuning to improve performance on a set of metrics including: BLEU, ROUGE, BERTScore, SBERT similarity, rhyme rate, syllable similarity, and word diversity. For the fine-tuned versions of the models, FLAN-T5 performed best and was used for further experiments.
+This project develops a machine learning pipeline to predict U.S. domestic flight delays within a 2-hour prediction window, classifying delayed flights so air traffic controllers can be prepared before delays materialize.
 
-Experiments on the FLAN-T5 model included prompt-engineering, additional layers for syllable and rhyme, while experiments into additional input lines, and backwards generation led to significant improvements over the fine-tuned model. These results demonstrate that encoder-decoder models with bidirectional attention and targeted input strategies are more effective for creative generation in a constrained domain such as hip-hop lyrics.
+We joined passenger flight records from the Department of Transportation (DOT) with weather observations from the National Oceanic and Atmospheric Administration (NOAA), using airport reference data and kriging interpolation to impute weather data across sparse station coverage. Significant class imbalance required us to prioritize recall-focused evaluation, using the F2 score as our primary metric alongside MAE.
+
+We established a baseline XGBoost Regressor trained with sliding-window cross-validation, then evaluated multi-stage architectures pairing regressors with downstream classifiers, including 2-tiered XGBoost + Random Forest, 2-tiered XGBoost + MLP, and a multi-tower Deep Neural Network. Feature engineering included temporal aggregates (origin delay in the last 4 hours, average route delay), graph-based airport features (betweenness centrality, closeness centrality), and kriging-interpolated weather variables.
+
+The best-performing model was a two-stage quantile XGBoost model, which concentrated classification efforts on identifying delays near the 15-minute delay threshold cutoff.
